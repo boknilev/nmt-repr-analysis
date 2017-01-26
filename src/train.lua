@@ -65,7 +65,16 @@ function main()
   
   -- define classifier
   classifier = nn.Sequential()
-  classifier:add(nn.Linear(model_opt.rnn_size,classifier_opt.classifier_size))
+  if classifier_opt.enc_layer > 0 then
+    classifier:add(nn.Linear(model_opt.rnn_size,classifier_opt.classifier_size))
+  else
+    if model_opt.use_chars_enc == 0 then
+      classifier:add(nn.Linear(model_opt.word_vec_size,classifier_opt.classifier_size))    
+    else
+      classifier:add(nn.Linear(model_opt.num_kernels,classifier_opt.classifier_size))      
+    end
+    -- TODO hangle decoder case with word vectors
+  end
   classifier:add(nn.Dropout(classifier_opt.classifier_dropout))
   classifier:add(nn.ReLU(true))
   classifier:add(nn.Linear(classifier_opt.classifier_size, classifier_opt.num_classes)) 
@@ -210,21 +219,51 @@ function train(train_data, epoch)
           table.insert(rnn_state_enc, init_fwd_enc[i]:zero())
         end
         local context = context_proto[{{}, {1,source_l}}]:clone() -- 1 x source_l x rnn_size
+        -- special case when using word vectors
+        if classifier_opt.enc_layer == 0 then
+          if model_opt.use_chars_enc == 0 then
+            context = context_proto_word_vecs[{ {}, {1,source_l}, {} }]:clone()
+          else
+            context = context_proto_char_cnn[{ {}, {1,source_l}, {} }]:clone()
+          end
+        end
         
         -- forward encoder
         if classifier_opt.verbose then print('forward fwd encoder') end
         for t = 1, source_l do
-          --print('skip_start_end:')
-          --print(skip_start_end)
-          -- forward encoder
-          local encoder_input = {source_input[t], table.unpack(rnn_state_enc)}
-          local enc_out = encoder:forward(encoder_input)
-          rnn_state_enc = enc_out
-          context[{{},t}]:copy(enc_out[module_num])
-          if classifier_opt.verbose then
-            print('t: ' .. t)
-            print('encoder_input:'); print(encoder_input)
-            print('enc_out:'); print(enc_out);
+          -- run through encoder if using representations above word vectors or if need it for decoder
+          if classifier_opt.enc_layer > 0 or classifier_opt.enc_or_dec == 'dec' then
+            local encoder_input = {source_input[t], table.unpack(rnn_state_enc)}
+            local enc_out = encoder:forward(encoder_input)
+            rnn_state_enc = enc_out
+            if classifier_opt.verbose then
+              print('t: ' .. t)
+              print('encoder_input:'); print(encoder_input)
+              print('enc_out:'); print(enc_out);
+            end
+          end
+          if classifier_opt.enc_layer > 0 then
+            context[{{},t}]:copy(enc_out[module_num])
+          else
+            local word_vec_out
+            if model_opt.use_chars_enc == 0 then              
+              if classifier_opt.verbose then print('forwarding word_vecs_enc at t: ' .. t) end
+              word_vec_out = word_vecs_enc:forward(source_input[t])
+            else
+              if classifier_opt.verbose then 
+                print('forwarding char_cnn_enc at t: ' .. t) 
+                print('source_input[t]:'); print(source_input[t]);                
+                print('word_vec_enc:forward(source_input[t]):'); print(word_vecs_enc:forward(source_input[t]));
+                print('char_cnn_enc:forward(word_vec_enc:forward(source_input[t])):'); print(char_cnn_enc:forward(word_vecs_enc:forward(source_input[t])))
+                print('mlp_enc:forward(char_cnn_enc:forward(word_vec_enc:forward(source_input[t]))):'); print(mlp_enc:forward(char_cnn_enc:forward(word_vecs_enc:forward(source_input[t]))))
+              end
+              word_vec_out = word_vecs_enc:forward(source_input[t])
+              word_vec_out = char_cnn_enc:forward(word_vec_out)
+              if model_opt.num_highway_layers > 0 then
+                word_vec_out = mlp_enc:forward(word_vec_out)
+              end
+            end
+            context[{{},t}]:copy(word_vec_out)
           end
         end
         
@@ -292,6 +331,10 @@ function train(train_data, epoch)
             else
               decoder_input = {decoder_input1, context[{{1}, source_l}], table.unpack(rnn_state_dec)}
             end
+            
+            -- TODO implement this case
+            assert(classifier_opt.enc_layer > 0, 'using word embeddings on decoder side not yet implemented')
+              
             local out_decoder = decoder:forward(decoder_input)
             --local out = model[3]:forward(out_decoder[#out_decoder]) -- K x vocab_size
             rnn_state_dec = {} -- to be modified later
@@ -331,9 +374,9 @@ function train(train_data, epoch)
           print('classifier_input_all:'); print(classifier_input_all);
           print('batch_labels[j]:'); print(batch_labels[j])
           print('string format: ' .. indices_to_string(batch_labels[j], idx2label))
-          -- forward/backward classifier
           print('forward/backward classifier')
         end
+        -- forward/backward classifier
         for t = 1, classifier_input_all:size(2) do
           local classifier_input = classifier_input_all[{{},t}]
           classifier_input = classifier_input:view(classifier_input:nElement())
@@ -433,13 +476,48 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
       table.insert(rnn_state_enc, init_fwd_enc[i]:zero())
     end
     local context = context_proto[{{}, {1,source_l}}]:clone() -- 1 x source_l x rnn_size
+    -- special case when using word vectors
+    if classifier_opt.enc_layer == 0 then
+      if model_opt.use_chars_enc == 0 then
+        context = context_proto_word_vecs[{ {}, {1,source_l}, {} }]:clone()
+      else
+        context = context_proto_char_cnn[{ {}, {1,source_l}, {} }]:clone()
+      end
+    end    
     
     -- forward encoder
     for t = 1, source_l do
-      local encoder_input = {source_input[t], table.unpack(rnn_state_enc)}
-      local enc_out = encoder:forward(encoder_input)
-      rnn_state_enc = enc_out
-      context[{{},t}]:copy(enc_out[module_num])
+      -- run through encoder if using representations above word vectors or if need it for decoder
+      if classifier_opt.enc_layer > 0 or classifier_opt.enc_or_dec == 'dec' then
+        local encoder_input = {source_input[t], table.unpack(rnn_state_enc)}
+        local enc_out = encoder:forward(encoder_input)
+        rnn_state_enc = enc_out
+      end
+      if classifier_opt.enc_layer > 0 then
+        context[{{},t}]:copy(enc_out[module_num])
+      else
+        -- TODO make sure size of context is same dimension as size of word vectors (by default they are both 500)
+        local word_vec_out
+        if model_opt.use_chars_enc == 0 then              
+          if classifier_opt.verbose then print('forwarding word_vecs_enc at t: ' .. t) end
+          word_vec_out = word_vecs_enc:forward(source_input[t])
+        else
+          -- TODO make sure size of context is same dimension as size of charCNN output (by default the context is 500 but the charcNN is 1000)
+          if classifier_opt.verbose then 
+            print('forwarding char_cnn_enc at t: ' .. t) 
+            print('source_input[t]:'); print(source_input[t]);                
+            print('word_vec_enc:forward(source_input[t]):'); print(word_vecs_enc:forward(source_input[t]));
+            print('char_cnn_enc:forward(word_vec_enc:forward(source_input[t])):'); print(char_cnn_enc:forward(word_vecs_enc:forward(source_input[t])))
+            print('mlp_enc:forward(char_cnn_enc:forward(word_vec_enc:forward(source_input[t]))):'); print(mlp_enc:forward(char_cnn_enc:forward(word_vecs_enc:forward(source_input[t]))))
+          end
+          word_vec_out = word_vecs_enc:forward(source_input[t])
+          word_vec_out = char_cnn_enc:forward(word_vec_out)
+          if model_opt.num_highway_layers > 0 then
+            word_vec_out = mlp_enc:forward(word_vec_out)
+          end
+        end
+        context[{{},t}]:copy(word_vec_out)
+      end      
     end
     
     local rnn_state_dec = {}
@@ -523,7 +601,6 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
     local pred_labels = {}
     for t = 1, classifier_input_all:size(2) do
       -- take word representation
-      --local classifier_input = enc_out[2*classifier_opt.enc_layer - classifier_opt.use_cell]
       local classifier_input = classifier_input_all[{{},t}]      
       classifier_input = classifier_input:view(classifier_input:nElement())        
       local classifier_out = classifier:forward(classifier_input)
