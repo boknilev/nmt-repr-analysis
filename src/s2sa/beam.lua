@@ -68,7 +68,7 @@ cmd:option('-cl_max_sent_len', 50, 'Maximum sentence length')
 cmd:option('-cl_optim', 'ADAM', 'Optimizer to use in the classifier (ADAM/ADAGRAD/ADADELTA/SGD)')
 cmd:option('-cl_patience', 5, 'Stop training if no improvement in dev loss after this many epochs')
 -- which word representation to use
-cmd:option('-cl_enc_layer', 2, 'Which layer in the encoder/decoder to use for word representation')
+cmd:option('-cl_enc_layer', 2, 'Which layer in the encoder/decoder to use for word representation (0 for word embeddings)')
 cmd:option('-cl_use_cell', 0, 'Whether to use cell vector instead of hidden vector for word representation')
 cmd:option('-cl_enc_or_dec', 'enc', 'Whether to use encoder or decoder for word representation')
 -- debug
@@ -414,6 +414,14 @@ function get_layer(layer)
       word_vecs_enc = layer
     elseif layer.name == 'word_vecs_dec' then
       word_vecs_dec = layer
+    elseif layer.name == 'charcnn_enc' then
+      char_cnn_enc = layer
+    elseif layer.name == 'mlp_enc' then
+      mlp_enc = layer
+    elseif layer.name == 'charcnn_dec' then
+      char_cnn_dec = layer
+    elseif layer.name == 'mlp_dec' then
+      mlp_dec = layer
     end
   end
 end
@@ -565,6 +573,9 @@ function init(arg)
   idx2word_targ = idx2key(opt.targ_dict)
   word2idx_targ = flip_table(idx2word_targ)
 
+  -- TODO if applying here, consider not applying again below
+  model[1]:apply(get_layer)
+  
   -- load character dictionaries if needed
   if model_opt.use_chars_enc == 1 or model_opt.use_chars_dec == 1 then
     utf8 = require 'lua-utf8'
@@ -614,6 +625,10 @@ function init(arg)
   end
 
   context_proto = torch.zeros(1, MAX_SENT_L, model_opt.rnn_size)
+  context_proto_word_vecs = torch.zeros(1, MAX_SENT_L, model_opt.word_vec_size)
+  if model_opt.use_chars_enc == 1 or model_opt.use_chars_dec == 1 then
+    context_proto_char_cnn = torch.zeros(1, MAX_SENT_L, model_opt.num_kernels)
+  end
   local h_init_dec = torch.zeros(opt.beam, model_opt.rnn_size)
   local h_init_enc = torch.zeros(1, model_opt.rnn_size)
   if opt.gpuid >= 0 then
@@ -625,8 +640,16 @@ function init(arg)
       context_proto = context_proto:cuda()
       cutorch.setDevice(opt.gpuid2)
       context_proto2 = torch.zeros(opt.beam, MAX_SENT_L, model_opt.rnn_size):cuda()
+      context_proto_word_vecs = context_proto_word_vecs:cuda()
+      if model_opt.use_chars_enc == 1 or model_opt.use_chars_dec == 1 then
+        context_proto_char_cnn = context_proto_char_cnn:cuda()
+      end
     else
       context_proto = context_proto:cuda()
+      context_proto_word_vecs = context_proto_word_vecs:cuda()
+      if model_opt.use_chars_enc == 1 or model_opt.use_chars_dec == 1 then
+        context_proto_char_cnn = context_proto_char_cnn:cuda()
+      end
     end
     if model_opt.attn == 1 then
       attn_layer = attn_layer:cuda()
