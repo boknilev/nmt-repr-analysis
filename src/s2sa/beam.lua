@@ -58,6 +58,7 @@ cmd:option('-cl_test_target_file', '', 'Path to test file with target sentences'
 cmd:option('-cl_save', '', 'Path to folder where experiment will be saved')
 cmd:option('-cl_save_model', 1, 'Whether to save model on every epoch')
 cmd:option('-cl_pred_file', '', 'Prefix to save prediction files (should be base name, not full path)')
+cmd:option('-cl_clf_model', '', 'Classifier model to load when evaluating only')
 -- classifier params
 cmd:option('-cl_dropout', 0.5, 'Classifier dropout rate')
 cmd:option('-cl_classifier_size', 0, 'Classifier hidden layer size (if 0, will use rnn size from the trained model)')
