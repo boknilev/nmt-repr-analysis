@@ -26,11 +26,10 @@ function main()
   assert(path.exists(classifier_opt.test_source_file), 'test_source_file does not exist')
   if classifier_opt.enc_or_dec == 'dec' then
     assert(path.exists(classifier_opt.train_target_file), 'train_target_file does not exist')
-    assert(path.exists(classifier_opt.val_target_file), 'val_target_file does not exist')
     assert(path.exists(classifier_opt.test_target_file), 'test_target_file does not exist')    
   end
   assert(path.exists(classifier_opt.save), 'save dir does not exist')
-  assert(path.exists(classifier_opt.clf_model), 'classifier model does not exist') 
+  assert(path.exists(classifier_opt.clf_model), 'classifier model does not exist')
   
   -- number of module for word representation
   module_num = 2*classifier_opt.enc_layer - classifier_opt.use_cell
@@ -61,33 +60,30 @@ function main()
   end
   
   -- define classifier
-  classifier = torch.load(classifier_opt.clf_model)
+  classifier = torch.load(classifier_opt.clf_model)  
   print('==> loaded classification model:')
   print(classifier)
 
   -- define classification criterion
-  criterion = nn.CrossEntropyCriterion() 
- 
+  criterion = nn.CrossEntropyCriterion()
+
   -- move to cuda
   if opt.gpuid >= 0 then     
     classifier = classifier:cuda()
     criterion = criterion:cuda()
   end
 
-confusion = optim.ConfusionMatrix(classes) 
- 
+  confusion = optim.ConfusionMatrix(classes)
+
   -- Log results to files
   test_logger = optim.Logger(paths.concat(classifier_opt.save, 'test.log'), classifier_opt.pred_file)  
   
   collectgarbage(); collectgarbage();
   
   -- do epochs
-    epoch = 1
-    test_loss = eval(test_data, epoch, test_logger, 'test', classifier_opt.pred_file)
-    -- print('finished epoch ' .. epoch .. ', with val loss: ' .. val_loss)
-    -- print('best epoch: ' .. best_epoch .. ', with val loss: ' .. best_loss)
-    -- epoch = epoch + 1    
-    collectgarbage(); collectgarbage();
+  epoch = 1
+  test_loss = eval(test_data, epoch, test_logger, 'test', classifier_opt.pred_file)
+  collectgarbage(); collectgarbage();
 end
 
 function eval(data, epoch, logger, test_or_val, pred_filename)
@@ -130,13 +126,49 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
       table.insert(rnn_state_enc, init_fwd_enc[i]:zero())
     end
     local context = context_proto[{{}, {1,source_l}}]:clone() -- 1 x source_l x rnn_size
+    -- special case when using word vectors
+    if classifier_opt.enc_layer == 0 then
+      if model_opt.use_chars_enc == 0 then
+        context = context_proto_word_vecs[{ {}, {1,source_l}, {} }]:clone()
+      else
+        context = context_proto_char_cnn[{ {}, {1,source_l}, {} }]:clone()
+      end
+    end
     
     -- forward encoder
     for t = 1, source_l do
-      local encoder_input = {source_input[t], table.unpack(rnn_state_enc)}
-      local enc_out = encoder:forward(encoder_input)
-      rnn_state_enc = enc_out
-      context[{{},t}]:copy(enc_out[module_num])
+      -- run through encoder if using representations above word vectors or if need it for decoder
+      local enc_out
+      if classifier_opt.enc_layer > 0 or classifier_opt.enc_or_dec == 'dec' then
+        local encoder_input = {source_input[t], table.unpack(rnn_state_enc)}
+        enc_out = encoder:forward(encoder_input)
+        rnn_state_enc = enc_out
+      end
+      if classifier_opt.enc_layer > 0 then
+        context[{{},t}]:copy(enc_out[module_num])
+      else
+        -- TODO make sure size of context is same dimension as size of word vectors (by default they are both 500)
+        local word_vec_out
+        if model_opt.use_chars_enc == 0 then
+          if classifier_opt.verbose then print('forwarding word_vecs_enc at t: ' .. t) end
+          word_vec_out = word_vecs_enc:forward(source_input[t])
+        else
+          -- TODO make sure size of context is same dimension as size of charCNN output (by default the context is 500 but the charcNN is 1000)
+          if classifier_opt.verbose then
+            print('forwarding char_cnn_enc at t: ' .. t)
+            print('source_input[t]:'); print(source_input[t]);
+            print('word_vec_enc:forward(source_input[t]):'); print(word_vecs_enc:forward(source_input[t]));
+            print('char_cnn_enc:forward(word_vec_enc:forward(source_input[t])):'); print(char_cnn_enc:forward(word_vecs_enc:forward(source_input[t])))
+            print('mlp_enc:forward(char_cnn_enc:forward(word_vec_enc:forward(source_input[t]))):'); print(mlp_enc:forward(char_cnn_enc:forward(word_vecs_enc:forward(source_input[t]))))
+          end
+          word_vec_out = word_vecs_enc:forward(source_input[t])
+          word_vec_out = char_cnn_enc:forward(word_vec_out)
+          if model_opt.num_highway_layers > 0 then
+            word_vec_out = mlp_enc:forward(word_vec_out)
+          end
+        end
+        context[{{},t}]:copy(word_vec_out)
+      end
     end
     
     local rnn_state_dec = {}
@@ -220,7 +252,6 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
     local pred_labels = {}
     for t = 1, classifier_input_all:size(2) do
       -- take word representation
-      --local classifier_input = enc_out[2*classifier_opt.enc_layer - classifier_opt.use_cell]
       local classifier_input = classifier_input_all[{{},t}]      
       classifier_input = classifier_input:view(classifier_input:nElement())        
       local classifier_out = classifier:forward(classifier_input)
@@ -265,7 +296,6 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
   
 end
 
-
 function load_data(classifier_opt, label2idx)
   local test_data
   if classifier_opt.enc_or_dec == 'enc' then
@@ -279,7 +309,6 @@ function load_data(classifier_opt, label2idx)
   end
   return test_data
 end
-
 
 function load_source_data(file, label_file, label2idx, max_sent_len) 
   local max_sent_len = max_sent_len or math.huge

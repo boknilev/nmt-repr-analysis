@@ -33,6 +33,7 @@ Once you've run `train.lua` and have some models saved, you can run `th src/eval
 * `cl_test_source_file`: test file with sentences in the source language
 * `cl_save`: Path where the test logs will be saved
 * `cl_pred_file`: Prefix to save prediction files (should be base name, not full path)
+* `cl_enc_layer`: Which layer in the encoder/decoder to use for word representation (0 for word embeddings)
 
 ### Acknowledgements 
 This project uses code from [seq2seq-attn](https://github.com/harvardnlp/seq2seq-attn).
