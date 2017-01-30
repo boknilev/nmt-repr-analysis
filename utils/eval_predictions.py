@@ -276,6 +276,32 @@ def eval_predictions_by_ambiguity(gold, pred, words, ambig, nonambig, tags, fig_
     return fig_num
 
 
+def assign_majority_baseline(train_gold, train_words, test_words):
+    """ Find the majority baseline
+    
+    Return tuple of (local_pred, global_pred) - the local and global majority baselines
+    """
+
+    tag2count, word2tag2count = dict(), dict()
+    for g, w in zip(train_gold, train_words):
+        tag2count[g] = tag2count.get(g, 0) + 1
+        if w in word2tag2count:
+            word2tag2count[w][g] = word2tag2count[w].get(g, 0) + 1
+        else:
+            word2tag2count[w] = {g: 1}
+    majority_tag, majority_count = sorted(tag2count.items(), key=operator.itemgetter(1), reverse=True)[0]
+    print 'global majority tag:', majority_tag, 'count:', majority_count
+    local_pred = []
+    for w in test_words:
+        if w in word2tag2count:
+            most_freq_tag, _ = sorted(word2tag2count[w].items(), key=operator.itemgetter(1), reverse=True)[0]
+            local_pred.append(most_freq_tag)
+        else:
+            local_pred.append(majority_tag)
+    global_pred = [majority_tag]*len(local_pred)
+    return local_pred, global_pred
+
+
 def run(gold_filename, pred_filename, train_lbl_filename=None, 
         train_filename=None, test_filename=None, fig_pref=None,
         test_pred_file2=None, label1='model 1', label2='model 2', annotation='', scale_acc=100.0):
@@ -338,6 +364,20 @@ def run(gold_filename, pred_filename, train_lbl_filename=None,
             fig_num += 1
             fig_filename = fig_pref + '.tagfreq.cum.maxfreq.compare.png'
             plot_accuracy_by_freq_compare(freqs, accuracies, freqs2, accuracies2, label1, label2, fig_title, fig_filename, scale_acc=scale_acc)
+
+
+    if train_lbl_filename and train_filename and test_filename:
+        # majority baseline
+        print 'getting majority baseline'
+        train_gold = get_flat_words(train_lbl_filename)
+        train_words = get_flat_words(train_filename)
+        test_words = get_flat_words(test_filename)
+        pred_majority_local, pred_majority_global = assign_majority_baseline(train_gold, train_words, test_words)
+        print 'evaluating global majority baseline'
+        eval_predictions(gold, pred_majority_global, tags)
+        print 'evaluating local majority baseline'
+        eval_predictions(gold, pred_majority_local, tags)       
+
 
     if train_filename and test_filename:
         word_freq_dict = get_freq_dict(train_filename)
@@ -425,6 +465,8 @@ if __name__ == '__main__':
         annotation = 'POS'
     elif args['--annotation'] and args['--annotation'].lower() in ['morph', 'morphology']:
         annotation = 'Morph'
+    elif args['--annotation'] and args['--annotation'].lower() in ['stag', 'semtag', 'semtags']:
+        annotation = 'Semtag'
     else:
         annotation = ''
         
