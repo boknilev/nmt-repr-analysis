@@ -232,9 +232,10 @@ function train(train_data, epoch)
         if classifier_opt.verbose then print('forward fwd encoder') end
         for t = 1, source_l do
           -- run through encoder if using representations above word vectors or if need it for decoder
+          local enc_out
           if classifier_opt.enc_layer > 0 or classifier_opt.enc_or_dec == 'dec' then
             local encoder_input = {source_input[t], table.unpack(rnn_state_enc)}
-            local enc_out = encoder:forward(encoder_input)
+            enc_out = encoder:forward(encoder_input)
             rnn_state_enc = enc_out
             if classifier_opt.verbose then
               print('t: ' .. t)
