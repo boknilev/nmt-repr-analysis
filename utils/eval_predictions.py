@@ -203,17 +203,74 @@ def plot_accuracy_by_freq(freqs, accuracies, filename=None, title=''):
         plt.savefig(filename)
 
 
-def plot_accuracy_by_freq_compare(freqs1, accuracies1, freqs2, accuracies2, label1, label2, title, filename=None, scale_acc=1.00, yscale_base=10.0):
+def plot_accuracy_by_freq_compare(freqs1, accuracies1, freqs2, accuracies2, label1, label2, title, filename=None, scale_acc=1.00, yscale_base=10.0, alpha=0.5, tags=None):
     
-    plt.plot(freqs1, accuracies1, marker='o', color='r', label=label1, linestyle='None', fillstyle='none')
-    plt.plot(freqs2, accuracies2, marker='+', color='y', label=label2, linestyle='None', fillstyle='none')
+    plt.plot(freqs1, accuracies1, marker='o', color='r', label=label1, linestyle='None', fillstyle='none', alpha=alpha)
+    plt.plot(freqs2, accuracies2, marker='+', color='y', label=label2, linestyle='None', fillstyle='none', alpha=alpha)
+
+    if tags:
+        print 'tags:', tags, 'len:', len(tags)
+        print 'len(freqs1):', len(freqs1), 'len(freqs2)', len(freqs2)
+        print 'len(accuracies1):', len(accuracies1), 'len(accuracies2)', len(accuracies2)
+        if len(tags) == len(freqs1) and len(tags) == len(freqs2):
+            print 'annotating tags'
+            for i, tag in enumerate(tags):
+                plt.annotate(tag, (freqs[1][i], accuracies[1][i]))
+
+
     plt.xscale('symlog')
     #plt.yscale('log', basey=yscale_base)
-    plt.legend(loc='lower right')
+    plt.legend(loc='lower right', prop={'size':14})
     plt.xlabel('Frequency', size='large', fontweight='demibold')
     plt.ylabel('Accuracy', size='large', fontweight='demibold')
     plt.ylim(ymax=1.01*scale_acc)
     plt.title(title, fontweight='demibold')
+    plt.tight_layout()
+    if filename:
+        print 'saving plot to:', filename
+        plt.savefig(filename)    
+
+def eval_predictions_by_tag(gold, pred, tags):
+
+    correct, wrong = np.zeros(len(tags)), np.zeros(len(tags))
+    tag2idx = dict([(tag, i) for i, tag in enumerate(sorted(tags))])
+    for g, p in zip(gold, pred):
+        if g == p:
+            correct[tag2idx[g]] += 1
+        else:
+            wrong[tag2idx[g]] += 1
+    accs = 100.0*correct/(correct+wrong)
+    return accs, sorted(tags)
+
+
+def plot_accuracy_by_tag_compare(accuracies1, accuracies2, tags, tag_freq_dict, label1, label2, title, filename=None, scale_acc=1.00, yscale_base=10.0, alpha=0.5):
+    #from adjustText import adjust_text 
+    tag_freqs = [tag_freq_dict[tag] for tag in tags]
+    #plt.plot(tag_freqs, accuracies1, marker='o', color='r', label=label1, linestyle='None', fillstyle='none', alpha=alpha)
+    #plt.plot(tag_freqs, accuracies2, marker='+', color='y', label=label2, linestyle='None', fillstyle='none', alpha=alpha)
+    plt.plot(tag_freqs, accuracies2-accuracies1, marker='o', color='c', label=label2, linestyle='None', fillstyle='none', alpha=alpha)
+
+    print 'annotating tags'
+    texts = []
+    for i, tag in enumerate(tags):
+        #plt.annotate(tag, (tag_freqs[i], accuracies1[i]), xytext=(-10,10), \
+        #        textcoords='offset points', ha='right', va='bottom', \
+        #        arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0'))
+        #plt.annotate(tag, (tag_freqs[i], accuracies1[i]))
+        #plt.annotate(tag, (tag_freqs[i], accuracies2[i]))
+        plt.annotate(tag, (tag_freqs[i], accuracies2[i]-accuracies1[i]))
+        #texts.append(plt.text(tag_freqs[i], accuracies1[i], tag))
+    #adjust_text(texts, force_text=0.05, arrowprops=dict(arrowstyle="-|>", color='r', alpha=0.5))
+
+    plt.xscale('symlog')
+    #plt.yscale('log', basey=yscale_base)
+    #plt.legend(loc='lower right', prop={'size':14})
+    plt.xlabel('Frequency', size='large', fontweight='demibold')
+    plt.ylabel('Accuracy', size='large', fontweight='demibold')
+    #plt.ylim(ymax=1.05*scale_acc)
+    plt.ylim(ymax=1.05*max(accuracies2-accuracies1))
+    plt.title(title, fontweight='demibold')
+    plt.tight_layout()
     if filename:
         print 'saving plot to:', filename
         plt.savefig(filename)    
@@ -328,6 +385,15 @@ def run(gold_filename, pred_filename, train_lbl_filename=None,
             fig_num += 1
             fig_filename = fig_pref + '.tagfreq.compare.png'
             plot_accuracy_by_freq_compare(freqs, accuracies, freqs2, accuracies2, label1, label2, fig_title, fig_filename, scale_acc=scale_acc)
+
+            print 'evaluating by tag'
+            tag_accs, sorted_tags = eval_predictions_by_tag(gold, pred, tags)
+            tag_accs2, _ = eval_predictions_by_tag(gold2, pred2, tags2)
+            plt.figure(fig_num, figsize=(9,6))
+            fig_num += 1
+            fig_filename = fig_pref + '.tag.compare.png'
+            fig_title = 'Accuracy per Tag Frequency' if annotation == '' else annotation + ' ' + 'Accuracy per Tag Frequency'
+            plot_accuracy_by_tag_compare(tag_accs, tag_accs2, sorted_tags, tag_freq_dict, label1, label2, fig_title, fig_filename, scale_acc=scale_acc) 
         
         print 'evaluating predictions by cumulative minimal tag frequency'
         print 'evaluating file:', pred_filename
