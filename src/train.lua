@@ -65,19 +65,23 @@ function main()
   
   -- define classifier
   classifier = nn.Sequential()
-  if classifier_opt.enc_layer > 0 then
-    classifier:add(nn.Linear(model_opt.rnn_size,classifier_opt.classifier_size))
+  if classifier_opt.linear_classifier then
+    classifier:add(nn.Linear(model_opt.rnn_size, classifier_opt.num_classes))
   else
-    if model_opt.use_chars_enc == 0 then
-      classifier:add(nn.Linear(model_opt.word_vec_size,classifier_opt.classifier_size))    
+    if classifier_opt.enc_layer > 0 then
+      classifier:add(nn.Linear(model_opt.rnn_size,classifier_opt.classifier_size))
     else
-      classifier:add(nn.Linear(model_opt.num_kernels,classifier_opt.classifier_size))      
+      if model_opt.use_chars_enc == 0 then
+        classifier:add(nn.Linear(model_opt.word_vec_size,classifier_opt.classifier_size))    
+      else
+        classifier:add(nn.Linear(model_opt.num_kernels,classifier_opt.classifier_size))      
+      end
+      -- TODO handle decoder case with word vectors
     end
-    -- TODO hangle decoder case with word vectors
+    classifier:add(nn.Dropout(classifier_opt.classifier_dropout))
+    classifier:add(nn.ReLU(true))
+    classifier:add(nn.Linear(classifier_opt.classifier_size, classifier_opt.num_classes)) 
   end
-  classifier:add(nn.Dropout(classifier_opt.classifier_dropout))
-  classifier:add(nn.ReLU(true))
-  classifier:add(nn.Linear(classifier_opt.classifier_size, classifier_opt.num_classes)) 
   print('==> defined classification model:')
   print(classifier)
     
