@@ -204,7 +204,7 @@ def plot_accuracy_by_freq(freqs, accuracies, filename=None, title=''):
 
 
 def plot_accuracy_by_freq_compare(freqs1, accuracies1, freqs2, accuracies2, label1, label2, title, filename=None, scale_acc=1.00, yscale_base=10.0, alpha=0.5, tags=None):
-    
+
     plt.plot(freqs1, accuracies1, marker='o', color='r', label=label1, linestyle='None', fillstyle='none', alpha=alpha)
     plt.plot(freqs2, accuracies2, marker='+', color='y', label=label2, linestyle='None', fillstyle='none', alpha=alpha)
 
@@ -230,6 +230,42 @@ def plot_accuracy_by_freq_compare(freqs1, accuracies1, freqs2, accuracies2, labe
         print 'saving plot to:', filename
         plt.savefig(filename)    
 
+def plot_accuracy_by_freq_compare_histogram(freqs1, accuracies1, freqs2, accuracies2, label1, label2, title, filename=None, scale_acc=1.00, yscale_base=10.0, alpha=0.5, tags=None):
+    freqs1 = np.array(freqs1)
+    freqs2 = np.array(freqs2)
+    accuracies1 = np.array(accuracies1)
+    accuracies2 = np.array(accuracies2)
+
+    bins = ['0-5','5-10', '10-20', '20-50', '50-100', '100-500', '500-1000', '1000+']
+    limits = [-1, 5, 10, 20, 50, 100, 500, 1000, 10000000]
+
+    hist1 = [0]*(len(limits)-1)
+    hist2 = [0]*(len(limits)-1)
+    for idx,limit in enumerate(limits):
+        if idx == 0:
+            continue
+        elem1 = np.where(np.logical_and(freqs1 > limits[idx-1], freqs1 <= limit))
+        hist1[idx-1] = np.average(accuracies1[elem1])
+        elem2 = np.where(np.logical_and(freqs2 > limits[idx-1], freqs2 <= limit))
+        hist2[idx-1] = np.average(accuracies2[elem2])
+
+    ind = np.arange(len(hist1))
+    width = 0.35
+
+    word_rects = plt.bar(ind, hist1, width, color='r', hatch='/')
+    char_rects = plt.bar(ind+width, hist2, width, color='y', hatch='\\')
+
+    
+    plt.xticks(ind + width, tuple(bins))
+    plt.legend((word_rects, char_rects), ('Word', 'Char'), loc='lower right')
+    plt.ylabel('Average Bin Accuracy', size='large', fontweight='demibold')
+    plt.xlabel('Frequency', size='large', fontweight='demibold')
+    plt.ylim(ymax=1.01*scale_acc)
+    plt.title(title, fontweight='demibold')
+    if filename:
+        print 'saving plot to:', filename
+        plt.savefig(filename)
+
 def eval_predictions_by_tag(gold, pred, tags):
 
     correct, wrong = np.zeros(len(tags)), np.zeros(len(tags))
@@ -248,7 +284,8 @@ def plot_accuracy_by_tag_compare(accuracies1, accuracies2, tags, tag_freq_dict, 
     tag_freqs = [tag_freq_dict[tag] for tag in tags]
     #plt.plot(tag_freqs, accuracies1, marker='o', color='r', label=label1, linestyle='None', fillstyle='none', alpha=alpha)
     #plt.plot(tag_freqs, accuracies2, marker='+', color='y', label=label2, linestyle='None', fillstyle='none', alpha=alpha)
-    plt.plot(tag_freqs, accuracies2-accuracies1, marker='o', color='c', label=label2, linestyle='None', fillstyle='none', alpha=alpha)
+    # plt.plot(tag_freqs, accuracies2-accuracies1, marker='o', color='c', label=label2, linestyle='None', fillstyle='none', alpha=alpha)
+    plt.scatter(tag_freqs, accuracies2-accuracies1, s=np.pi * (0.5 * (accuracies2-accuracies1)+10 )**2, c = np.random.rand(len(tag_freqs)), alpha=0.5)
 
     print 'annotating tags'
     texts = []
@@ -258,7 +295,7 @@ def plot_accuracy_by_tag_compare(accuracies1, accuracies2, tags, tag_freq_dict, 
         #        arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0'))
         #plt.annotate(tag, (tag_freqs[i], accuracies1[i]))
         #plt.annotate(tag, (tag_freqs[i], accuracies2[i]))
-        plt.annotate(tag, (tag_freqs[i], accuracies2[i]-accuracies1[i]))
+        plt.annotate(tag, (tag_freqs[i], accuracies2[i]-accuracies1[i]), horizontalalignment='center', verticalalignment='center', size=10+0.05*(accuracies2[i]-accuracies1[i]))
         #texts.append(plt.text(tag_freqs[i], accuracies1[i], tag))
     #adjust_text(texts, force_text=0.05, arrowprops=dict(arrowstyle="-|>", color='r', alpha=0.5))
 
@@ -266,9 +303,10 @@ def plot_accuracy_by_tag_compare(accuracies1, accuracies2, tags, tag_freq_dict, 
     #plt.yscale('log', basey=yscale_base)
     #plt.legend(loc='lower right', prop={'size':14})
     plt.xlabel('Frequency', size='large', fontweight='demibold')
-    plt.ylabel('Accuracy', size='large', fontweight='demibold')
+    plt.ylabel('Increase in Accuracy', size='large', fontweight='demibold')
     #plt.ylim(ymax=1.05*scale_acc)
-    plt.ylim(ymax=1.05*max(accuracies2-accuracies1))
+    plt.ylim(ymax=1.15*max(accuracies2-accuracies1))
+    plt.xlim(min(tag_freqs) / 2, max(tag_freqs) * 5)
     plt.title(title, fontweight='demibold')
     plt.tight_layout()
     if filename:
@@ -462,6 +500,12 @@ def run(gold_filename, pred_filename, train_lbl_filename=None,
         if test_pred_file2:
             print 'evaluating file:', test_pred_file2
             freqs2, accuracies2 = eval_predictions_by_freq(gold2, pred2, tags2, word_freq_dict, words=words, scale_acc=scale_acc)
+
+            plt.figure(fig_num)
+            fig_num += 1
+            fig_filename = fig_pref + '.wordfreq.histogram.compare.png'
+            plot_accuracy_by_freq_compare_histogram(freqs, accuracies, freqs2, accuracies2, label1, label2, fig_title, fig_filename, scale_acc=scale_acc)
+
             plt.figure(fig_num)
             fig_num += 1
             fig_filename = fig_pref + '.wordfreq.compare.png'
