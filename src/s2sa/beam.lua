@@ -71,6 +71,8 @@ cmd:option('-cl_patience', 5, 'Stop training if no improvement in dev loss after
 cmd:option('-cl_enc_layer', 2, 'Which layer in the encoder/decoder to use for word representation (0 for word embeddings)')
 cmd:option('-cl_use_cell', 0, 'Whether to use cell vector instead of hidden vector for word representation')
 cmd:option('-cl_enc_or_dec', 'enc', 'Whether to use encoder or decoder for word representation')
+-- use linear classifier instead?
+cmd:option('-cl_linear_classifier', false, 'Whether to use a linear classifier')
 -- debug
 cmd:option('-cl_verbose', false, 'Print a lot of information')
 
