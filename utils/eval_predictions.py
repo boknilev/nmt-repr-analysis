@@ -203,10 +203,10 @@ def plot_accuracy_by_freq(freqs, accuracies, filename=None, title=''):
         plt.savefig(filename)
 
 
-def plot_accuracy_by_freq_compare(freqs1, accuracies1, freqs2, accuracies2, label1, label2, title, filename=None, scale_acc=1.00, yscale_base=10.0, alpha=0.5, tags=None):
-
+def plot_accuracy_by_freq_compare(freqs1, accuracies1, freqs2, accuracies2, label1, label2, title, filename=None, scale_acc=1.00, yscale_base=10.0, alpha=0.8, tags=None):
+    
     plt.plot(freqs1, accuracies1, marker='o', color='r', label=label1, linestyle='None', fillstyle='none', alpha=alpha)
-    plt.plot(freqs2, accuracies2, marker='+', color='y', label=label2, linestyle='None', fillstyle='none', alpha=alpha)
+    plt.plot(freqs2, accuracies2, marker='+', color='c', label=label2, linestyle='None', fillstyle='none', alpha=alpha)
 
     if tags:
         print 'tags:', tags, 'len:', len(tags)
@@ -430,7 +430,7 @@ def run(gold_filename, pred_filename, train_lbl_filename=None,
             plt.figure(fig_num, figsize=(9,6))
             fig_num += 1
             fig_filename = fig_pref + '.tag.compare.png'
-            fig_title = 'Accuracy per Tag Frequency' if annotation == '' else annotation + ' ' + 'Accuracy per Tag Frequency'
+            fig_title = 'Change in Accuracy per Tag Frequency' if annotation == '' else 'Change in ' + annotation + ' ' + 'Accuracy per Tag Frequency'
             plot_accuracy_by_tag_compare(tag_accs, tag_accs2, sorted_tags, tag_freq_dict, label1, label2, fig_title, fig_filename, scale_acc=scale_acc) 
         
         print 'evaluating predictions by cumulative minimal tag frequency'
@@ -574,7 +574,7 @@ if __name__ == '__main__':
     if args['--annotation'] and args['--annotation'].lower() == 'pos':
         annotation = 'POS'
     elif args['--annotation'] and args['--annotation'].lower() in ['morph', 'morphology']:
-        annotation = 'Morph'
+        annotation = 'Morphology'
     elif args['--annotation'] and args['--annotation'].lower() in ['stag', 'semtag', 'semtags']:
         annotation = 'Semtag'
     else:
