@@ -118,8 +118,8 @@ def plot_bars_two_sets_ratios(word_pos_accs, char_pos_accs, word_morph_accs, cha
 #plot_bars_two_sets(word_pos_accs, char_pos_accs, sets, labels, 'POS Accuracy by Representation Type', 1, 'pos-acc-repr-type.png', auto_label=False)
 #plot_bars_two_sets(word_morph_accs, char_morph_accs, sets, labels, 'Morphology Accuracy by Representation Type', 2, 'morph-acc-repr-type.png', auto_label=False)
 sets_stacked = ['Word POS', 'Char POS', 'Word Morph', 'Char Morph']
-plot_bars_two_sets_stacked(word_pos_accs, char_pos_accs, word_morph_accs, char_morph_accs, sets_stacked, labels, 'Accuracy by Representation Type', 1, 'acc-repr-type-stacked.png')
-plot_bars_two_sets_ratios(word_pos_accs, char_pos_accs, word_morph_accs, char_morph_accs, ['POS', 'Morph'], labels, 'Improvement in POS and Morphology Accuracy', 111, 'acc-repr-type-diff.png')
+#plot_bars_two_sets_stacked(word_pos_accs, char_pos_accs, word_morph_accs, char_morph_accs, sets_stacked, labels, 'Accuracy by Representation Type', 1, 'acc-repr-type-stacked.png')
+#plot_bars_two_sets_ratios(word_pos_accs, char_pos_accs, word_morph_accs, char_morph_accs, ['POS', 'Morph'], labels, 'Improvement in POS and Morphology Accuracy', 111, 'acc-repr-type-diff.png')
 
 
 
@@ -192,7 +192,7 @@ def plot_bars_layer_all_langs(accs1, accs2, accs3, sets, labels, title, fignum, 
     
     rects1 = plt.bar(ind, accs1, width, color='y', hatch='/', label=sets[0], alpha=opacity)
     rects2 = plt.bar(ind + width, accs2, width, color='r', hatch='+', label=sets[1], alpha=opacity)
-    rects3 = plt.bar(ind + width + width, accs3, width, color='g', hatch='\\', label=sets[2], alpha=opacity)
+    rects3 = plt.bar(ind + width + width, accs3, width, color='c', hatch='\\', label=sets[2], alpha=opacity)
     
     
     plt.ylabel('Accuracy', size='large', fontweight='demibold')
@@ -213,8 +213,8 @@ def plot_bars_layer_all_langs(accs1, accs2, accs3, sets, labels, title, fignum, 
     #plt.show()    
     plt.savefig(filename)    
 
-#plot_bars_layer_all_langs(word_layer0_all_langs, word_layer1_all_langs, word_layer2_all_langs, layer_labels, layer_sets, \
-#                            'Accuracy by Representation Layer', 3333, 'rep-layer-acc-all-langs.png')
+plot_bars_layer_all_langs(word_layer0_all_langs, word_layer1_all_langs, word_layer2_all_langs, layer_labels, layer_sets, \
+                           'POS Accuracy by Representation Layer', 3333, 'rep-layer-acc-all-langs.png')
     
 
 def plot_bars_two_groups(group1, group2, groups, labels, title, fignum, filename):
@@ -295,7 +295,7 @@ def plot_bars_five_sets(accs1, accs2, accs3, accs4, accs5, sets, labels, title, 
     #plt.show()    
     plt.savefig(filename)
 
-#plot_bars_five_sets(ar_en_word_layers, ar_he_word_layers, de_en_word_layers, fr_en_word_layers, cz_en_word_layers, layer_sets, layer_labels, 'Accuracy by Representation Layer', 333, 'rep-layer-acc-all-langs.png')
+#plot_bars_five_sets(ar_en_word_layers, ar_he_word_layers, de_en_word_layers, fr_en_word_layers, cz_en_word_layers, layer_sets, layer_labels, 'POS Accuracy by Representation Layer', 333, 'rep-layer-acc-all-langs.png')
 
 
 ### effect of target language ###
@@ -331,6 +331,10 @@ ar_morph_bleu = [word_morph_ar, bleu_word_ar, char_morph_ar, bleu_char_ar]
 en_morph_bleu = [word_morph_en, bleu_word_en, char_morph_en, bleu_char_en]
 he_morph_bleu = [word_morph_he, bleu_word_he, char_morph_he, bleu_char_he]
 labels3 = ['Word Morph', 'Word BLEU', 'Char Morph', 'Char BLEU']
+ar_word_pos_morph_bleu = [word_pos_ar, word_morph_ar, bleu_word_ar]
+en_word_pos_morph_bleu = [word_pos_en, word_morph_en, bleu_word_en]
+he_word_pos_morph_bleu = [word_pos_he, word_morph_he, bleu_word_he]
+de_word_pos_morph_bleu = [word_pos_de, word_morph_de, bleu_word_de]
 
 
 def plot_bars_three_sets(accs1, accs2, accs3, sets, labels, title, fignum, filename, indices=None, legend_loc=None, ylabel='Accuracy or BLEU'):
@@ -413,9 +417,9 @@ def plot_bars_four_sets(accs1, accs2, accs3, accs4, sets, labels, title, fignum,
     rects4 = plt.bar(ind + width + width + width, accs4, width, color='c', hatch='\\', label=sets[3], alpha=opacity)
     
     
-    plt.ylabel('Accuracy', size='large', fontweight='demibold')
+    plt.ylabel('Accuracy or BLEU', size='large', fontweight='demibold')
     plt.title(title, fontweight='demibold')
-    plt.xticks(ind + width + width, labels, size='large', fontweight='demibold')
+    plt.xticks(ind + width + width/2, labels, size='large', fontweight='demibold')
     loc = legend_loc
     if loc == None:
         loc = 'upper left'
@@ -438,6 +442,8 @@ def plot_bars_four_sets(accs1, accs2, accs3, accs4, sets, labels, title, fignum,
 labels = ['POS', 'BLEU']
 sets_all = ['Ar', 'He', 'De', 'En']
 #plot_bars_four_sets(ar_word_pos_bleu, he_word_pos_bleu, de_word_pos_bleu, en_word_pos_bleu, sets_all, labels, 'Effect of Target Language on POS Accuracy', 44, 'pos-acc-target-lang-all.png', legend_loc='upper right')
+labels_pos_morph_bleu = ['POS', 'Morphology', 'BLEU']
+plot_bars_four_sets(ar_word_pos_morph_bleu, he_word_pos_morph_bleu, de_word_pos_morph_bleu, en_word_pos_morph_bleu, sets_all, labels_pos_morph_bleu, 'Effect of Target Language on POS/Morph Accuracy', 44, 'pos-morph-acc-target-lang-all.png', legend_loc='upper right')
 
 
 # order is: word layer 1, char layer 1, word layer 2, char layer 2
