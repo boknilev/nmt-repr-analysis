@@ -63,8 +63,40 @@ function main()
     encoder_brnn = model[4]
   end
   
+  -- classifier input size
+  local classifier_input_size
+  if classifier_opt.enc_layer > 0 then
+    classifier_input_size = model_opt.rnn_size
+  else
+    if model_opt.use_chars_enc == 0 then
+      classifier_input_size = model_opt.word_vec_size
+    else
+      classifier_input_size = model_opt.num_kernels
+    end
+    -- TODO handle decoder case with word vectors
+  end
+  if classifier_opt.use_max_attn then
+    print('==> using representation of most attended word as additional features')
+    -- TODO this assumes encoder/decoder use same representation (hidden, words, char cnn), so double the size if using the attended word
+    classifier_input_size = 2*classifier_input_size
+  end
+  if classifier_opt.use_summary_vec then
+    print('==> using summary vector as additional features')
+    classifier_input_size = classifier_input_size + model_opt.rnn_size
+  end
+  
   -- define classifier
   classifier = nn.Sequential()
+  if classifier_opt.linear_classifier then
+    classifier:add(nn.Linear(classifier_input_size, classifier_opt.num_classes))
+  else
+    classifier:add(nn.Linear(classifier_input_size, classifier_opt.classifier_size))
+    classifier:add(nn.Dropout(classifier_opt.classifier_dropout))
+    classifier:add(nn.ReLU(true))
+    classifier:add(nn.Linear(classifier_opt.classifier_size, classifier_opt.num_classes)) 
+  end    
+  
+  --[[
   if classifier_opt.linear_classifier then
     classifier:add(nn.Linear(model_opt.rnn_size, classifier_opt.num_classes))
   else
@@ -82,6 +114,8 @@ function main()
     classifier:add(nn.ReLU(true))
     classifier:add(nn.Linear(classifier_opt.classifier_size, classifier_opt.num_classes)) 
   end
+  --]]
+  
   print('==> defined classification model:')
   print(classifier)
     
@@ -311,6 +345,7 @@ function train(train_data, epoch)
         end
         
         local dec_all_out, target_l
+        local attn_argmax = {}
         if classifier_opt.enc_or_dec == 'dec' then
           local target = batch_input[j][2]
           target_l = math.min(target:size(1), opt.max_sent_l)
@@ -320,6 +355,7 @@ function train(train_data, epoch)
             print('target_l: ' .. target_l)
           end            
           dec_all_out = context_proto[{{}, {1,target_l}}]:clone() 
+          
           -- forward decoder
           if classifier_opt.verbose then print('forward decoder') end
           for t = 2, target_l do 
@@ -341,7 +377,14 @@ function train(train_data, epoch)
             assert(classifier_opt.enc_layer > 0, 'using word embeddings on decoder side not yet implemented')
               
             local out_decoder = decoder:forward(decoder_input)
-            --local out = model[3]:forward(out_decoder[#out_decoder]) -- K x vocab_size
+            if classifier_opt.use_max_attn then
+              local out = model[3]:forward(out_decoder[#out_decoder]):float() -- 1 x vocab_size
+              local score, index = out:max(2)
+              local max_attn, max_index = decoder_softmax.output:max(2)
+              attn_argmax[t] = max_index[1]
+            end
+            
+            
             rnn_state_dec = {} -- to be modified later
             if model_opt.input_feed == 1 then
               table.insert(rnn_state_dec, out_decoder[#out_decoder])
@@ -355,9 +398,21 @@ function train(train_data, epoch)
               print('decoder_input1:'); print(decoder_input1);
               print('decoder_input:'); print(decoder_input);
               print('out_decoder:'); print(out_decoder);
+              print('out:'); print(out);
               print('rnn_state_dec:'); print(rnn_state_dec);
             end
           end                            
+        end
+        
+        -- determine relevant encoder output (happens here b/c may be needed for decoder, when using attn)
+        local enc_all_out
+        if classifier_opt.use_max_attn then
+          if not skip_start_end then
+            enc_all_out = context
+          else
+            local end_idx = source_l == opt.max_sent_len and source_l or source_l-1
+            enc_all_out = context[{{}, {2,end_idx}}]
+          end        
         end
         
         -- take encoder/decoder output as input to classifier
@@ -366,6 +421,12 @@ function train(train_data, epoch)
           -- always ignore start and end sybmols in dec
           local end_idx = target_l == opt.max_sent_len and target_l or target_l-1
           classifier_input_all = dec_all_out[{{}, {2,end_idx}}]
+          -- concat summary vector
+          if classifier_opt.use_summary_vec then
+            local summary_vec =  rnn_state_enc[model_opt.num_layers*2]:view(rnn_state_enc[model_opt.num_layers*2]:nElement())
+            classifier_input_all = torch.cat(classifier_input_all[1], torch.expand(summary_vec:view(1, summary_vec:size(1)), classifier_input_all:size(2), summary_vec:size(1)), 2)
+            classifier_input_all = classifier_input_all:view(1, classifier_input_all:size(1), classifier_input_all:size(2))
+          end
         else
           if not skip_start_end then
             classifier_input_all = context
@@ -384,7 +445,13 @@ function train(train_data, epoch)
         -- forward/backward classifier
         for t = 1, classifier_input_all:size(2) do
           local classifier_input = classifier_input_all[{{},t}]
-          classifier_input = classifier_input:view(classifier_input:nElement())
+          classifier_input = classifier_input:view(classifier_input:nElement())     
+          
+          if classifier_opt.use_max_attn then
+            local enc_attn_argmax = enc_all_out[{{}, attn_argmax[t+1][1]}]
+            classifier_input = torch.cat(classifier_input, enc_attn_argmax:view(enc_attn_argmax:nElement()))
+          end
+          
           local classifier_out = classifier:forward(classifier_input)
           loss = loss + criterion:forward(classifier_out, batch_labels[j][t])
           num_words = num_words + 1
@@ -558,6 +625,7 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
     end
     
     local dec_all_out, target_l
+    local attn_argmax = {}    
     if classifier_opt.enc_or_dec == 'dec' then
       target_l = math.min(target:size(1), opt.max_sent_l)
       dec_all_out = context_proto[{{}, {1,target_l}}]:clone() 
@@ -576,7 +644,14 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
           decoder_input = {decoder_input1, context[{{1}, source_l}], table.unpack(rnn_state_dec)}
         end
         local out_decoder = decoder:forward(decoder_input)
-        --local out = model[3]:forward(out_decoder[#out_decoder]) -- K x vocab_size
+        if classifier_opt.use_max_attn then
+          local out = model[3]:forward(out_decoder[#out_decoder]):float() -- 1 x vocab_size
+          local score, index = out:max(2)
+          local max_attn, max_index = decoder_softmax.output:max(2)
+          attn_argmax[t] = max_index[1]
+        end
+        
+        
         rnn_state_dec = {} -- to be modified later
         if model_opt.input_feed == 1 then
           table.insert(rnn_state_dec, out_decoder[#out_decoder])
@@ -588,12 +663,30 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
       end                            
     end  
     
+    
+    -- determine relevant encoder output (happens here b/c may be needed for decoder, when using attn)
+    local enc_all_out
+    if classifier_opt.use_max_attn then
+      if not skip_start_end then
+        enc_all_out = context
+      else
+        local end_idx = source_l == opt.max_sent_len and source_l or source_l-1
+        enc_all_out = context[{{}, {2,end_idx}}]
+      end
+    end
+    
     -- take encoder/decoder output as input to classifier
     local classifier_input_all
     if classifier_opt.enc_or_dec == 'dec' then
       -- always ignore start and end sybmols in dec
       local end_idx = target_l == opt.max_sent_len and target_l or target_l-1
       classifier_input_all = dec_all_out[{{}, {2,end_idx}}]
+      -- concat summary vector
+      if classifier_opt.use_summary_vec then
+        local summary_vec =  rnn_state_enc[model_opt.num_layers*2]:view(rnn_state_enc[model_opt.num_layers*2]:nElement())
+        classifier_input_all = torch.cat(classifier_input_all[1], torch.expand(summary_vec:view(1, summary_vec:size(1)), classifier_input_all:size(2), summary_vec:size(1)), 2)
+        classifier_input_all = classifier_input_all:view(1, classifier_input_all:size(1), classifier_input_all:size(2))
+      end      
     else
       if not skip_start_end then
         classifier_input_all = context
@@ -608,7 +701,13 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
     for t = 1, classifier_input_all:size(2) do
       -- take word representation
       local classifier_input = classifier_input_all[{{},t}]      
-      classifier_input = classifier_input:view(classifier_input:nElement())        
+      classifier_input = classifier_input:view(classifier_input:nElement())     
+      
+      if classifier_opt.use_max_attn then
+        local enc_attn_argmax = enc_all_out[{{}, attn_argmax[t+1][1]}]
+        classifier_input = torch.cat(classifier_input, enc_attn_argmax:view(enc_attn_argmax:nElement()))
+      end
+            
       local classifier_out = classifier:forward(classifier_input)
       -- get predicted labels to write to file
       if pred_file then
