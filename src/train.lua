@@ -63,23 +63,37 @@ function main()
     encoder_brnn = model[4]
   end
   
-  -- classifier input size
-  local classifier_input_size
+  -- local word_repr_size
   if classifier_opt.enc_layer > 0 then
-    classifier_input_size = model_opt.rnn_size
+    word_repr_size = model_opt.rnn_size
   else
     if model_opt.use_chars_enc == 0 then
-      classifier_input_size = model_opt.word_vec_size
+      word_repr_size = model_opt.word_vec_size
     else
-      classifier_input_size = model_opt.num_kernels
+      word_repr_size = model_opt.num_kernels
     end
     -- TODO handle decoder case with word vectors
   end
+      
+  local classifier_input_size = word_repr_size
+  if classifier_opt.no_dec_repr and (classifier_opt.use_max_attn or classifier_opt.use_min_attn or classifier_opt.use_rand_attn) then
+    print('==> not using decoder word representation; instead using only attended word representation')    
+    classifier_input_size = 0
+  end
+  
   if classifier_opt.use_max_attn then
     print('==> using representation of most attended word as additional features')
-    -- TODO this assumes encoder/decoder use same representation (hidden, words, char cnn), so double the size if using the attended word
-    classifier_input_size = 2*classifier_input_size
+    -- TODO this assumes encoder/decoder use same representation (hidden, words, char cnn)
+    classifier_input_size = classifier_input_size + word_repr_size
   end
+  if classifier_opt.use_min_attn then
+    print('==> using representation of least attended word as additional features')
+    classifier_input_size = classifier_input_size + word_repr_size
+  end  
+  if classifier_opt.use_rand_attn then
+    print('==> using representation of random attended word as additional features')
+    classifier_input_size = classifier_input_size + word_repr_size
+  end  
   if classifier_opt.use_summary_vec then
     print('==> using summary vector as additional features')
     classifier_input_size = classifier_input_size + model_opt.rnn_size
@@ -345,7 +359,7 @@ function train(train_data, epoch)
         end
         
         local dec_all_out, target_l
-        local attn_argmax = {}
+        local attn_argmax, attn_argmin, attn_argrand = {}, {}, {}
         if classifier_opt.enc_or_dec == 'dec' then
           local target = batch_input[j][2]
           target_l = math.min(target:size(1), opt.max_sent_l)
@@ -377,11 +391,21 @@ function train(train_data, epoch)
             assert(classifier_opt.enc_layer > 0, 'using word embeddings on decoder side not yet implemented')
               
             local out_decoder = decoder:forward(decoder_input)
-            if classifier_opt.use_max_attn then
+            if classifier_opt.use_max_attn or classifier_opt.use_min_attn or classifier_opt.use_rand_attn then
               local out = model[3]:forward(out_decoder[#out_decoder]):float() -- 1 x vocab_size
               local score, index = out:max(2)
-              local max_attn, max_index = decoder_softmax.output:max(2)
-              attn_argmax[t] = max_index[1]
+              if classifier_opt.use_max_attn then
+                local max_attn, max_index = decoder_softmax.output:max(2)
+                attn_argmax[t] = max_index[1]
+              end
+              if classifier_opt.use_min_attn then
+                local min_attn, min_index = decoder_softmax.output:min(2)
+                attn_argmin[t] = min_index[1]
+              end
+              if classifier_opt.use_rand_attn then
+                local rand_index = torch.random(decoder_softmax.output:size(2))
+                attn_argrand[t] = torch.LongTensor{rand_index} -- wrap in tensor for consistency with max/min case
+              end            
             end
             
             
@@ -406,7 +430,7 @@ function train(train_data, epoch)
         
         -- determine relevant encoder output (happens here b/c may be needed for decoder, when using attn)
         local enc_all_out
-        if classifier_opt.use_max_attn then
+        if classifier_opt.use_max_attn or classifier_opt.use_min_attn or classifier_opt.use_rand_attn then
           if not skip_start_end then
             enc_all_out = context
           else
@@ -450,6 +474,21 @@ function train(train_data, epoch)
           if classifier_opt.use_max_attn then
             local enc_attn_argmax = enc_all_out[{{}, attn_argmax[t+1][1]}]
             classifier_input = torch.cat(classifier_input, enc_attn_argmax:view(enc_attn_argmax:nElement()))
+          end
+          if classifier_opt.use_min_attn then
+            local enc_attn_argmin = enc_all_out[{{}, attn_argmin[t+1][1]}]
+            classifier_input = torch.cat(classifier_input, enc_attn_argmin:view(enc_attn_argmin:nElement()))
+          end
+          if classifier_opt.use_rand_attn then
+            local enc_attn_argrand = enc_all_out[{{}, attn_argrand[t+1][1]}]
+            classifier_input = torch.cat(classifier_input, enc_attn_argrand:view(enc_attn_argrand:nElement()))
+          end
+          
+          -- TODO: this is a hack because old torch.cat cannot handle empty vectors; simplify after updating
+          if classifier_opt.no_dec_repr then
+            local offset = word_repr_size
+            if classifier_opt.use_summary_vec then offset = offset + model_opt.rnn_size end
+            classifier_input = classifier_input[{ {offset+1, classifier_input:size(1)} }]
           end
           
           local classifier_out = classifier:forward(classifier_input)
@@ -625,7 +664,7 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
     end
     
     local dec_all_out, target_l
-    local attn_argmax = {}    
+    local attn_argmax, attn_argmin, attn_argrand = {}, {}, {}
     if classifier_opt.enc_or_dec == 'dec' then
       target_l = math.min(target:size(1), opt.max_sent_l)
       dec_all_out = context_proto[{{}, {1,target_l}}]:clone() 
@@ -644,11 +683,21 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
           decoder_input = {decoder_input1, context[{{1}, source_l}], table.unpack(rnn_state_dec)}
         end
         local out_decoder = decoder:forward(decoder_input)
-        if classifier_opt.use_max_attn then
+        if classifier_opt.use_max_attn or classifier_opt.use_min_attn or classifier_opt.use_rand_attn then
           local out = model[3]:forward(out_decoder[#out_decoder]):float() -- 1 x vocab_size
           local score, index = out:max(2)
-          local max_attn, max_index = decoder_softmax.output:max(2)
-          attn_argmax[t] = max_index[1]
+          if classifier_opt.use_max_attn then
+            local max_attn, max_index = decoder_softmax.output:max(2)
+            attn_argmax[t] = max_index[1]
+          end
+          if classifier_opt.use_min_attn then
+            local mix_attn, min_index = decoder_softmax.output:min(2)
+            attn_argmin[t] = min_index[1]
+          end
+          if classifier_opt.use_rand_attn then
+            local rand_index = torch.random(decoder_softmax.output:size(2))
+            attn_argrand[t] = torch.LongTensor{rand_index} -- wrap in tensor for consistency with max/min case
+          end
         end
         
         
@@ -666,7 +715,7 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
     
     -- determine relevant encoder output (happens here b/c may be needed for decoder, when using attn)
     local enc_all_out
-    if classifier_opt.use_max_attn then
+    if classifier_opt.use_max_attn or classifier_opt.use_min_attn or classifier_opt.use_rand_attn then
       if not skip_start_end then
         enc_all_out = context
       else
@@ -707,7 +756,22 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
         local enc_attn_argmax = enc_all_out[{{}, attn_argmax[t+1][1]}]
         classifier_input = torch.cat(classifier_input, enc_attn_argmax:view(enc_attn_argmax:nElement()))
       end
-            
+      if classifier_opt.use_min_attn then
+        local enc_attn_argmin = enc_all_out[{{}, attn_argmin[t+1][1]}]
+        classifier_input = torch.cat(classifier_input, enc_attn_argmin:view(enc_attn_argmin:nElement()))
+      end
+      if classifier_opt.use_rand_attn then
+        local enc_attn_argrand = enc_all_out[{{}, attn_argrand[t+1][1]}]
+        classifier_input = torch.cat(classifier_input, enc_attn_argrand:view(enc_attn_argrand:nElement()))
+      end
+      
+      -- TODO: this is a hack because old torch.cat cannot handle empty vectors; simplify after updating
+      if classifier_opt.no_dec_repr then
+        local offset = word_repr_size
+        if classifier_opt.use_summary_vec then offset = offset + model_opt.rnn_size end
+        classifier_input = classifier_input[{ {offset+1, classifier_input:size(1)} }]
+      end
+                  
       local classifier_out = classifier:forward(classifier_input)
       -- get predicted labels to write to file
       if pred_file then

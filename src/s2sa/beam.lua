@@ -71,6 +71,11 @@ cmd:option('-cl_patience', 5, 'Stop training if no improvement in dev loss after
 cmd:option('-cl_enc_layer', 2, 'Which layer in the encoder/decoder to use for word representation (0 for word embeddings)')
 cmd:option('-cl_use_cell', 0, 'Whether to use cell vector instead of hidden vector for word representation')
 cmd:option('-cl_enc_or_dec', 'enc', 'Whether to use encoder or decoder for word representation')
+cmd:option('-cl_use_summary_vec', false, 'Wether to concatenate summary vector to word representation')
+cmd:option('-cl_use_max_attn', false, 'Whether to use the representation of the most attended word')
+cmd:option('-cl_use_min_attn', false, 'Whether to use the representation of the least attended word')
+cmd:option('-cl_use_rand_attn', false, 'Whether tn use the representation of a random attended word')
+cmd:option('-cl_no_dec_repr', false, 'Whether to not use decoder word representation; can apply only if one of cl_use_max/min/rand_attn options are given')
 -- use linear classifier instead?
 cmd:option('-cl_linear_classifier', false, 'Whether to use a linear classifier')
 -- debug
