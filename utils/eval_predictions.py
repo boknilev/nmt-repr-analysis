@@ -4,7 +4,8 @@ Evaluate pos/morph predictions
 
 Usage: eval_predictions.py [--train_lbl_file train_lbl_file] [--train_file train_file] [--test_file test_file] 
                             [--fig_pref fig_pref] [--test_pred_file2 test_pred_file2] 
-                            [--label1 label1] [--label2 label2] [--annotation annotation]
+                            [--label1 label1] [--label2 label2] [--annotation annotation] 
+                            [--fine2coarse_file fine2coarse_file] 
                             TEST_GOLD_FILE TEST_PRED_FILE
 
 Arguments:
@@ -13,15 +14,16 @@ Arguments:
   
   
 Options:
-  -h, --help                           show this help message  
-  --train_lbl_file train_lbl_file      train file with gold tags to collect frequency statistics
-  --train_file train_file              train file with original text to collect statistics
-  --test_file test_file                test file with original text (must be provided if train_file is given)
-  --fig_pref fig_pref                  file prefix to save figures of TEST_PRED_FILE
-  --test_pred_file2 test_pred_file2    file with predicted tags, one sentence per line, to compare with TEST_PRED_FILE
-  --label1 label1                      string label for model 1 when comparing two predictions
-  --label2 label2                      string label for model 2 when comparing two predictions
-  --annotation annotation              annotation type: pos, morph (for plot title)
+  -h, --help                             show this help message  
+  --train_lbl_file train_lbl_file        train file with gold tags to collect frequency statistics
+  --train_file train_file                train file with original text to collect statistics
+  --test_file test_file                  test file with original text (must be provided if train_file is given)
+  --fig_pref fig_pref                    file prefix to save figures of TEST_PRED_FILE
+  --test_pred_file2 test_pred_file2      file with predicted tags, one sentence per line, to compare with TEST_PRED_FILE
+  --label1 label1                        string label for model 1 when comparing two predictions
+  --label2 label2                        string label for model 2 when comparing two predictions
+  --annotation annotation                annotation type: pos, morph (for plot title)
+  --fine2coarse_file fine2coarse_file    File with mapping from fine to coarse tags (for semtags) 
 """
 
 from docopt import docopt
@@ -33,6 +35,7 @@ from matplotlib import rcParams
 rcParams.update({'figure.autolayout': True})
 import codecs, operator, sys
 
+UNK_TAG = 'UNK'
 
 
 def get_predictions(gold_filename, pred_filename):
@@ -257,7 +260,7 @@ def plot_accuracy_by_freq_compare_histogram(freqs1, accuracies1, freqs2, accurac
 
     
     plt.xticks(ind + width, tuple(bins))
-    plt.legend((word_rects, char_rects), ('Word', 'Char'), loc='lower right')
+    plt.legend((word_rects, char_rects), (label1, label2), loc='lower right')
     plt.ylabel('Average Bin Accuracy', size='large', fontweight='demibold')
     plt.xlabel('Frequency', size='large', fontweight='demibold')
     plt.ylim(ymax=1.01*scale_acc)
@@ -397,9 +400,20 @@ def assign_majority_baseline(train_gold, train_words, test_words):
     return local_pred, global_pred
 
 
+def load_fine2coarse_map(map_filename):
+    """ Load mapping of fine to coarse tags """
+
+    fine2coarse = dict()
+    with open(map_filename) as f:
+        for line in f:
+            fine, coarse = line.strip().split()
+            fine2coarse[fine] = coarse
+    return fine2coarse
+
+
 def run(gold_filename, pred_filename, train_lbl_filename=None, 
         train_filename=None, test_filename=None, fig_pref=None,
-        test_pred_file2=None, label1='model 1', label2='model 2', annotation='', scale_acc=100.0):
+        test_pred_file2=None, label1='model 1', label2='model 2', annotation='', scale_acc=100.0, fine2coarse_filename=None):
 
     gold, pred, tags = get_predictions(gold_filename, pred_filename)    
     fig_num = 1
@@ -564,7 +578,17 @@ def run(gold_filename, pred_filename, train_lbl_filename=None,
     filtered_gold, filtered_pred = filter_by_min_tag_freq(gold, pred, min_freq, test_tag_freq_dict)
     fig_num = eval_predictions(filtered_gold, filtered_pred, tags, fig_pref + '.test.tagfreq.min.cm.png' if fig_pref else None, fig_num=fig_num)
     """
-    
+
+    if fine2coarse_filename:
+        print 'mapping fine to coarse tags'
+        fine2coarse = load_fine2coarse_map(fine2coarse_filename)
+        gold_coarse = [fine2coarse.get(g, g) for g in gold]
+        pred_coarse = [fine2coarse.get(p, p) for p in pred]
+        tags_coarse = list(set(gold_coarse))
+        print 'evaluating coarse tags'
+        eval_predictions(gold_coarse, pred_coarse, tags_coarse)
+        fig_num += 1
+        fig_num = eval_predictions(gold_coarse, pred_coarse, tags, fig_pref + '.coarse.cm.png' if fig_pref else None, fig_num=fig_num)
 
 
 
@@ -582,5 +606,5 @@ if __name__ == '__main__':
         
     run(args['TEST_GOLD_FILE'], args['TEST_PRED_FILE'], 
         args['--train_lbl_file'], args['--train_file'], args['--test_file'], 
-        args['--fig_pref'], args['--test_pred_file2'], args['--label1'], args['--label2'], annotation=annotation)
+        args['--fig_pref'], args['--test_pred_file2'], args['--label1'], args['--label2'], annotation=annotation, fine2coarse_filename=args['--fine2coarse_file'])
     
