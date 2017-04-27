@@ -339,15 +339,16 @@ function train(train_data, epoch)
           -- forward bwd encoder
           if classifier_opt.verbose then print('forward bwd encoder') end
           for t = source_l, 1, -1 do
-            
-            local encoder_input = {source_input[t], table.unpack(rnn_state_enc)}
-            local enc_out = encoder_brnn:forward(encoder_input)
-            rnn_state_enc = enc_out
-            context[{{},t}]:add(enc_out[module_num])
-            if classifier_opt.verbose then
-              print('t: ' .. t)
-              print('encoder_input:'); print(encoder_input);
-              print('enc_out:'); print(enc_out);
+            if classifier_opt.enc_layer > 0 or classifier_opt.enc_or_dec == 'dec' then              
+              local encoder_input = {source_input[t], table.unpack(rnn_state_enc)}
+              local enc_out = encoder_brnn:forward(encoder_input)
+              rnn_state_enc = enc_out
+              context[{{},t}]:add(enc_out[module_num])
+              if classifier_opt.verbose then
+                print('t: ' .. t)
+                print('encoder_input:'); print(encoder_input);
+                print('enc_out:'); print(enc_out);
+              end
             end
           end
           if model_opt.init_dec == 1 then
@@ -650,10 +651,12 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
       end
       -- forward backward encoder
       for t = source_l, 1, -1 do
-        local encoder_input = {source_input[t], table.unpack(rnn_state_enc)}
-        local enc_out = encoder_brnn:forward(encoder_input)
-        rnn_state_enc = enc_out
-        context[{{},t}]:add(enc_out[module_num])
+        if classifier_opt.enc_layer > 0 or classifier_opt.enc_or_dec == 'dec' then
+          local encoder_input = {source_input[t], table.unpack(rnn_state_enc)}
+          local enc_out = encoder_brnn:forward(encoder_input)
+          rnn_state_enc = enc_out
+          context[{{},t}]:add(enc_out[module_num])
+        end
       end
       if model_opt.init_dec == 1 then
         for L = 1, model_opt.num_layers do
