@@ -201,9 +201,9 @@ function train(train_data, epoch)
   
   local time = sys.clock()
   classifier:training()
-  -- TODO maybe don't set encoder to training here
-  encoder:training(); decoder:training();
-  if model_opt.brnn == 1 then encoder_brnn:training() end
+  -- set MT model to evaluate mode
+  encoder:evaluate(); decoder:evaluate();
+  if model_opt.brnn == 1 then encoder_brnn:evaluate() end
   
   local shuffle = torch.randperm(#train_data)
   
@@ -557,7 +557,7 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
   
   local time = sys.clock()
   classifier:evaluate()
-  encoder:evaluate(); decoder();
+  encoder:evaluate(); decoder:evaluate();
   if model_opt.brnn == 1 then encoder_brnn:evaluate() end
   
   print('\n==> evaluating on ' .. test_or_val .. ' data')
