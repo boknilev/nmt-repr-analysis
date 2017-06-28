@@ -98,6 +98,11 @@ function main()
     print('==> using summary vector as additional features')
     classifier_input_size = classifier_input_size + model_opt.rnn_size
   end
+  if classifier_opt.deprel_repr == 'concat' then
+    print('==> concatenating head and modifier word representations for predicting dependency relation')
+    classifier_input_size = classifier_input_size + word_repr_size
+  end
+  
   
   -- define classifier
   classifier = nn.Sequential()
@@ -216,13 +221,19 @@ function train(train_data, epoch)
     xlua.progress(i, #train_data)
     
     -- prepare mini-batch
-    local batch_input, batch_labels = {}, {}
+    local batch_input, batch_labels, batch_heads = {}, {}, {}
     for j = i,math.min(i+classifier_opt.batch_size-1, #train_data) do
       local source = train_data[shuffle[j]][1]      
       if opt.gpuid >= 0 then source = source:cuda() end
-      local input, labels = {source}
+      local input, labels, heads = {source}
       if classifier_opt.enc_or_dec == 'enc' then
-        labels = train_data[shuffle[j]][2]
+        if classifier_opt.deprel then
+          heads = train_data[shuffle[j]][2]
+          table.insert(batch_heads, heads)
+          labels = train_data[shuffle[j]][3]
+        else
+          labels = train_data[shuffle[j]][2]
+        end
       elseif classifier_opt.enc_or_dec == 'dec' then
         local target = train_data[shuffle[j]][2]
         --if opt.gpuid >= 0 then target = target:cuda() end
@@ -472,6 +483,7 @@ function train(train_data, epoch)
           local classifier_input = classifier_input_all[{{},t}]
           classifier_input = classifier_input:view(classifier_input:nElement())     
           
+          -- options using attention mechanism
           if classifier_opt.use_max_attn then
             local enc_attn_argmax = enc_all_out[{{}, attn_argmax[t+1][1]}]
             classifier_input = torch.cat(classifier_input, enc_attn_argmax:view(enc_attn_argmax:nElement()))
@@ -492,23 +504,42 @@ function train(train_data, epoch)
             classifier_input = classifier_input[{ {offset+1, classifier_input:size(1)} }]
           end
           
-          local classifier_out = classifier:forward(classifier_input)
-          loss = loss + criterion:forward(classifier_out, batch_labels[j][t])
-          num_words = num_words + 1
-          local output_grad = criterion:backward(classifier_out, batch_labels[j][t])
-          classifier:backward(classifier_input, output_grad)
-          
-          if classifier_opt.verbose then 
-            print('t: ' .. t)
-            print('classifier_input:'); print(classifier_input);
-            print('classifier_out:'); print(classifier_out);
-            print('batch_labels[j][t]: ' .. batch_labels[j][t])
-            print('loss:'); print(loss);
-            print('output_grad:'); print(output_grad);
+          -- dependency relations options
+          if classifier_opt.deprel and batch_heads[j][t] > 0 then
+            --print('batch_heads[j][t]:'); print(batch_heads[j][t])
+            local head_repr = classifier_input_all[{{}, batch_heads[j][t]}]
+            head_repr = head_repr:view(head_repr:nElement())
+            --print('head_repr:'); print(head_repr)
+            --print('classifier_input:'); print(classifier_input)
+            if classifier_opt.deprel_repr == 'concat' then
+              classifier_input = torch.cat(classifier_input, head_repr)
+            else 
+              classifier_input = torch.add(classifier_input, head_repr)
+            end            
+            --print('classifier_input:'); print(classifier_input)
           end
           
-          -- update confusion matrix
-          confusion:add(classifier_out, batch_labels[j][t])
+          -- don't classify roots
+          if not classifier_opt.deprel or batch_heads[j][t] > 0 then
+          
+            local classifier_out = classifier:forward(classifier_input)
+            loss = loss + criterion:forward(classifier_out, batch_labels[j][t])
+            num_words = num_words + 1
+            local output_grad = criterion:backward(classifier_out, batch_labels[j][t])
+            classifier:backward(classifier_input, output_grad)
+            
+            if classifier_opt.verbose then 
+              print('t: ' .. t)
+              print('classifier_input:'); print(classifier_input);
+              print('classifier_out:'); print(classifier_out);
+              print('batch_labels[j][t]: ' .. batch_labels[j][t])
+              print('loss:'); print(loss);
+              print('output_grad:'); print(output_grad);
+            end
+            
+            -- update confusion matrix
+            confusion:add(classifier_out, batch_labels[j][t])
+          end
         end    
       end
       
@@ -565,10 +596,15 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
   local loss, num_words = 0, 0
   for i=1,#data do 
     xlua.progress(i, #data)
-    local source, target, labels = data[i][1]
+    local source, target, labels, heads = data[i][1]
     if opt.gpuid >= 0 then source = source:cuda() end
     if classifier_opt.enc_or_dec == 'enc' then
-      labels = data[i][2]      
+      if classifier_opt.deprel then
+        heads = data[i][2]
+        labels = data[i][3]
+      else
+        labels = data[i][2]      
+      end
     else
       target = data[i][2]
       if opt.gpuid >= 0 then target = target:cuda() end
@@ -774,20 +810,35 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
         if classifier_opt.use_summary_vec then offset = offset + model_opt.rnn_size end
         classifier_input = classifier_input[{ {offset+1, classifier_input:size(1)} }]
       end
-                  
-      local classifier_out = classifier:forward(classifier_input)
-      -- get predicted labels to write to file
-      if pred_file then
-        local _, pred_idx =  classifier_out:max(1)
-        pred_idx = pred_idx:long()[1]
-        local pred_label = idx2label[pred_idx]
-        table.insert(pred_labels, pred_label)
+      
+      -- dependency relations options
+      if classifier_opt.deprel and heads[t] > 0 then
+        local head_repr = classifier_input_all[{{}, heads[t]}]
+        head_repr = head_repr:view(head_repr:nElement())
+        if classifier_opt.deprel_repr == 'concat' then
+          classifier_input = torch.cat(classifier_input, head_repr)
+        else 
+          classifier_input = torch.add(classifier_input, head_repr)
+        end            
       end
       
-      loss = loss + criterion:forward(classifier_out, labels[t])
-      num_words = num_words + 1
-      
-      confusion:add(classifier_out, labels[t])
+      -- don't classify roots
+      if not classifier_opt.deprel or heads[t] > 0 then
+                        
+        local classifier_out = classifier:forward(classifier_input)
+        -- get predicted labels to write to file
+        if pred_file then
+          local _, pred_idx =  classifier_out:max(1)
+          pred_idx = pred_idx:long()[1]
+          local pred_label = idx2label[pred_idx]
+          table.insert(pred_labels, pred_label)
+        end
+        
+        loss = loss + criterion:forward(classifier_out, labels[t])
+        num_words = num_words + 1
+        
+        confusion:add(classifier_out, labels[t])
+      end
     end
     if pred_file then
       pred_file:writeString(stringx.join(' ', pred_labels) .. '\n')
@@ -821,15 +872,27 @@ end
 function load_data(classifier_opt, label2idx)
   local train_data, val_data, test_data
   if classifier_opt.enc_or_dec == 'enc' then
-    unknown_labels = 0
-    train_data = load_source_data(classifier_opt.train_source_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len) 
-    print('==> words with unknown labels in train data: ' .. unknown_labels)
-    unknown_labels = 0
-    val_data = load_source_data(classifier_opt.val_source_file, classifier_opt.val_lbl_file, label2idx) 
-    print('==> words with unknown labels in val data: ' .. unknown_labels)
-    unknown_labels = 0
-    test_data = load_source_data(classifier_opt.test_source_file, classifier_opt.test_lbl_file, label2idx)   
-    print('==> words with unknown labels in test data: ' .. unknown_labels)
+    if classifier_opt.deprel then 
+      unknown_labels = 0
+      train_data = load_source_head_data(classifier_opt.train_source_file, classifier_opt.train_head_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len) 
+      print('==> words with unknown labels in train data: ' .. unknown_labels)
+      unknown_labels = 0
+      val_data = load_source_head_data(classifier_opt.val_source_file, classifier_opt.val_head_file, classifier_opt.val_lbl_file, label2idx) 
+      print('==> words with unknown labels in val data: ' .. unknown_labels)
+      unknown_labels = 0
+      test_data = load_source_head_data(classifier_opt.test_source_file, classifier_opt.test_head_file, classifier_opt.test_lbl_file, label2idx)   
+      print('==> words with unknown labels in test data: ' .. unknown_labels)      
+    else
+      unknown_labels = 0
+      train_data = load_source_data(classifier_opt.train_source_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len) 
+      print('==> words with unknown labels in train data: ' .. unknown_labels)
+      unknown_labels = 0
+      val_data = load_source_data(classifier_opt.val_source_file, classifier_opt.val_lbl_file, label2idx) 
+      print('==> words with unknown labels in val data: ' .. unknown_labels)
+      unknown_labels = 0
+      test_data = load_source_data(classifier_opt.test_source_file, classifier_opt.test_lbl_file, label2idx)   
+      print('==> words with unknown labels in test data: ' .. unknown_labels)
+    end
   else
     unknown_labels = 0
     train_data = load_source_target_data(classifier_opt.train_source_file, classifier_opt.train_target_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len) 
@@ -916,6 +979,41 @@ function load_source_target_data(source_file, target_file, target_label_file, la
   end
   return data
 
+end
+
+-- load source words and their head indices
+function load_source_head_data(file, head_file, label_file, label2idx, max_sent_len) 
+  local max_sent_len = max_sent_len or math.huge
+  local data = {}
+  for line, head_line, labels in seq.zip3(io.lines(file), io.lines(head_file), io.lines(label_file)) do
+    sent = beam.clean_sent(line)
+    local source
+    if model_opt.use_chars_enc == 0 then
+      source, _ = beam.sent2wordidx(line, word2idx_src, model_opt.start_symbol)
+    else
+      source, _ = beam.sent2charidx(line, char2idx, model_opt.max_word_l, model_opt.start_symbol)
+    end    
+    local label_idx = {}
+    for label in labels:gmatch'([^%s]+)' do
+      if label2idx[label] then
+        idx = label2idx[label]
+      else
+        print('Warning: unknown label ' .. label .. ' in line: ' .. line .. ' with labels ' .. labels)
+        print('Warning: using idx 0 for unknown')
+        idx = 0
+        unknown_labels = unknown_labels + 1
+      end
+      table.insert(label_idx, idx)
+    end
+    local heads = {}
+    for head in head_line:gmatch'([^%s]+)' do
+      table.insert(heads, tonumber(head))
+    end
+    if #label_idx <= max_sent_len then
+      table.insert(data, {source, heads, label_idx})
+    end
+  end
+  return data
 end
 
 

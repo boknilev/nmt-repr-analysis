@@ -55,6 +55,9 @@ cmd:option('-cl_test_source_file', '', 'Path to test file with source sentences'
 cmd:option('-cl_train_target_file', '', 'Path to train file with target sentences')
 cmd:option('-cl_val_target_file', '', 'Path to validation file with target sentences')
 cmd:option('-cl_test_target_file', '', 'Path to test file with target sentences')
+cmd:option('-cl_train_head_file', '', 'Path to train file with dependency head indices')
+cmd:option('-cl_val_head_file', '', 'Path to train file with dependency head indices')
+cmd:option('-cl_test_head_file', '', 'Path to train file with dependency head indices')
 cmd:option('-cl_save', '', 'Path to folder where experiment will be saved')
 cmd:option('-cl_save_model', 1, 'Whether to save model on every epoch')
 cmd:option('-cl_pred_file', '', 'Prefix to save prediction files (should be base name, not full path)')
@@ -76,6 +79,10 @@ cmd:option('-cl_use_max_attn', false, 'Whether to use the representation of the 
 cmd:option('-cl_use_min_attn', false, 'Whether to use the representation of the least attended word')
 cmd:option('-cl_use_rand_attn', false, 'Whether tn use the representation of a random attended word')
 cmd:option('-cl_no_dec_repr', false, 'Whether to not use decoder word representation; can apply only if one of cl_use_max/min/rand_attn options are given')
+-- dependency relation options
+cmd:option('-cl_deprel', false, 'Whether to predict dependency relations')
+cmd:option('-cl_deprel_repr', 'concat', 'Aggregation method for predicting dependency relations (concat | sum)')
+cmd:option('-cl_skip_root', true, 'Whether to skip the root (head index 0)')
 -- use linear classifier instead?
 cmd:option('-cl_linear_classifier', false, 'Whether to use a linear classifier')
 -- debug
