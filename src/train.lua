@@ -98,7 +98,7 @@ function main()
     print('==> using summary vector as additional features')
     classifier_input_size = classifier_input_size + model_opt.rnn_size
   end
-  if classifier_opt.deprel_repr == 'concat' then
+  if classifier_opt.deprel and classifier_opt.deprel_repr == 'concat' then
     print('==> concatenating head and modifier word representations for predicting dependency relation')
     classifier_input_size = classifier_input_size + word_repr_size
   end
