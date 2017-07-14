@@ -519,26 +519,30 @@ function train(train_data, epoch)
             --print('classifier_input:'); print(classifier_input)
           end
           
-          -- don't classify roots
-          if not classifier_opt.deprel or batch_heads[j][t] > 0 then
-          
-            local classifier_out = classifier:forward(classifier_input)
-            loss = loss + criterion:forward(classifier_out, batch_labels[j][t])
-            num_words = num_words + 1
-            local output_grad = criterion:backward(classifier_out, batch_labels[j][t])
-            classifier:backward(classifier_input, output_grad)
+          if batch_labels[j][t] == 0 then
+            print('Warning: skipping word with label idx 0')
+          else
+            -- don't classify roots
+            if not classifier_opt.deprel or batch_heads[j][t] > 0 then
             
-            if classifier_opt.verbose then 
-              print('t: ' .. t)
-              print('classifier_input:'); print(classifier_input);
-              print('classifier_out:'); print(classifier_out);
-              print('batch_labels[j][t]: ' .. batch_labels[j][t])
-              print('loss:'); print(loss);
-              print('output_grad:'); print(output_grad);
+              local classifier_out = classifier:forward(classifier_input)
+              loss = loss + criterion:forward(classifier_out, batch_labels[j][t])
+              num_words = num_words + 1
+              local output_grad = criterion:backward(classifier_out, batch_labels[j][t])
+              classifier:backward(classifier_input, output_grad)
+              
+              if classifier_opt.verbose then 
+                print('t: ' .. t)
+                print('classifier_input:'); print(classifier_input);
+                print('classifier_out:'); print(classifier_out);
+                print('batch_labels[j][t]: ' .. batch_labels[j][t])
+                print('loss:'); print(loss);
+                print('output_grad:'); print(output_grad);
+              end
+              
+              -- update confusion matrix
+              confusion:add(classifier_out, batch_labels[j][t])
             end
-            
-            -- update confusion matrix
-            confusion:add(classifier_out, batch_labels[j][t])
           end
         end    
       end
@@ -822,22 +826,26 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
         end            
       end
       
-      -- don't classify roots
-      if not classifier_opt.deprel or heads[t] > 0 then
-                        
-        local classifier_out = classifier:forward(classifier_input)
-        -- get predicted labels to write to file
-        if pred_file then
-          local _, pred_idx =  classifier_out:max(1)
-          pred_idx = pred_idx:long()[1]
-          local pred_label = idx2label[pred_idx]
-          table.insert(pred_labels, pred_label)
+      if labels[t] == 0 then
+        print('Warning: skipping word with label idx 0')
+      else
+        -- don't classify roots
+        if not classifier_opt.deprel or heads[t] > 0 then
+                          
+          local classifier_out = classifier:forward(classifier_input)
+          -- get predicted labels to write to file
+          if pred_file then
+            local _, pred_idx =  classifier_out:max(1)
+            pred_idx = pred_idx:long()[1]
+            local pred_label = idx2label[pred_idx]
+            table.insert(pred_labels, pred_label)
+          end
+          
+          loss = loss + criterion:forward(classifier_out, labels[t])
+          num_words = num_words + 1
+          
+          confusion:add(classifier_out, labels[t])
         end
-        
-        loss = loss + criterion:forward(classifier_out, labels[t])
-        num_words = num_words + 1
-        
-        confusion:add(classifier_out, labels[t])
       end
     end
     if pred_file then
@@ -924,7 +932,7 @@ function load_source_data(file, label_file, label2idx, max_sent_len)
       if label2idx[label] then
         idx = label2idx[label]
       else
-        print('Warning: unknown label ' .. label .. ' in line: ' .. line .. ' with labels ' .. labels)
+        print('Warning: unknown label ' .. label .. ' in line: ' .. line .. ' with labels: ' .. labels)
         print('Warning: using idx 0 for unknown')
         idx = 0
         unknown_labels = unknown_labels + 1
@@ -966,7 +974,7 @@ function load_source_target_data(source_file, target_file, target_label_file, la
       if label2idx[label] then
         idx = label2idx[label]
       else
-        print('Warning: unknown label ' .. label .. ' in target line: ' .. target_line .. ' with labels ' .. labels)
+        print('Warning: unknown label ' .. label .. ' in target line: ' .. target_line .. ' with labels: ' .. labels)
         print('Warning: using idx 0 for unknown')
         idx = 0
         unknown_labels = unknown_labels + 1
@@ -998,7 +1006,7 @@ function load_source_head_data(file, head_file, label_file, label2idx, max_sent_
       if label2idx[label] then
         idx = label2idx[label]
       else
-        print('Warning: unknown label ' .. label .. ' in line: ' .. line .. ' with labels ' .. labels)
+        print('Warning: unknown label ' .. label .. ' in line: ' .. line .. ' with labels: ' .. labels)
         print('Warning: using idx 0 for unknown')
         idx = 0
         unknown_labels = unknown_labels + 1
