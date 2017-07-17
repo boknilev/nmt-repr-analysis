@@ -1,5 +1,8 @@
 # Analyzing Neural MT Representations
 
+This repository contains the code for our paper on analyzing morphology in neural machine translation models:
+
+"What do Neural Machine Translation Models Learn about Morphology?", Yonatan Belinkov, Nadir Durrani, Fahim Dalvi, Hassan Sajjad, and James Glass, ACL 2017. 
 
 
 ## Instructions
@@ -34,6 +37,22 @@ Once you've run `train.lua` and have some models saved, you can run `th src/eval
 * `cl_save`: Path where the test logs will be saved
 * `cl_pred_file`: Prefix to save prediction files (should be base name, not full path)
 * `cl_enc_layer`: Which layer in the encoder/decoder to use for word representation (0 for word embeddings)
+
+## Citing
+If you use this code in your work, please consider citing our paper:
+
+
+```bib
+@InProceedings{belinkov:2017:acl,
+  author    = {Belinkov, Yonatan  and  Durrani, Nadir and Dalvi, Fahim and Sajjad, Hassan and Glass, James},
+  title     = {What do Neural Machine Translation Models Learn about Morphology?},
+  booktitle = {Proceedings of the 55th Annual Meeting of the Association for Computational Linguistics (ACL)},
+  month     = {July},
+  year      = {2017},
+  address   = {Vancouver},
+  publisher = {Association for Computational Linguistics},
+}
+```
 
 ### Acknowledgements 
 This project uses code from [seq2seq-attn](https://github.com/harvardnlp/seq2seq-attn).
