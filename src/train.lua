@@ -40,7 +40,7 @@ function main()
     
   -- first pass: get labels
   print('==> first pass: getting labels')
-  label2idx, idx2label = get_labels(classifier_opt.train_lbl_file)
+  label2idx, idx2label = get_labels(classifier_opt.train_lbl_file, classifier_opt.semdeprel)
   local classes = {}
   for idx, _ in ipairs(idx2label) do
     table.insert(classes, idx)
@@ -98,7 +98,7 @@ function main()
     print('==> using summary vector as additional features')
     classifier_input_size = classifier_input_size + model_opt.rnn_size
   end
-  if classifier_opt.deprel and classifier_opt.deprel_repr == 'concat' then
+  if (classifier_opt.deprel or classifier_opt.semdeprel) and classifier_opt.deprel_repr == 'concat' then
     print('==> concatenating head and modifier word representations for predicting dependency relation')
     classifier_input_size = classifier_input_size + word_repr_size
   end
@@ -227,7 +227,7 @@ function train(train_data, epoch)
       if opt.gpuid >= 0 then source = source:cuda() end
       local input, labels, heads = {source}
       if classifier_opt.enc_or_dec == 'enc' then
-        if classifier_opt.deprel then
+        if classifier_opt.deprel or classifier_opt.semdeprel then
           heads = train_data[shuffle[j]][2]
           table.insert(batch_heads, heads)
           labels = train_data[shuffle[j]][3]
@@ -259,6 +259,7 @@ function train(train_data, epoch)
       for j = 1,#batch_input do
         local source = batch_input[j][1]
         if classifier_opt.verbose then 
+          print('j: ' .. j)
           print('source:'); print(source);
           print(indices_to_string(source, idx2word_src))
         end
@@ -504,44 +505,71 @@ function train(train_data, epoch)
             classifier_input = classifier_input[{ {offset+1, classifier_input:size(1)} }]
           end
           
-          -- dependency relations options
-          if classifier_opt.deprel and batch_heads[j][t] > 0 then
-            --print('batch_heads[j][t]:'); print(batch_heads[j][t])
-            local head_repr = classifier_input_all[{{}, batch_heads[j][t]}]
-            head_repr = head_repr:view(head_repr:nElement())
-            --print('head_repr:'); print(head_repr)
-            --print('classifier_input:'); print(classifier_input)
-            if classifier_opt.deprel_repr == 'concat' then
-              classifier_input = torch.cat(classifier_input, head_repr)
-            else 
-              classifier_input = torch.add(classifier_input, head_repr)
-            end            
-            --print('classifier_input:'); print(classifier_input)
-          end
           
-          if batch_labels[j][t] == 0 then
-            print('Warning: skipping word with label idx 0')
-          else
-            -- don't classify roots
-            if not classifier_opt.deprel or batch_heads[j][t] > 0 then
-            
-              local classifier_out = classifier:forward(classifier_input)
-              loss = loss + criterion:forward(classifier_out, batch_labels[j][t])
-              num_words = num_words + 1
-              local output_grad = criterion:backward(classifier_out, batch_labels[j][t])
-              classifier:backward(classifier_input, output_grad)
-              
-              if classifier_opt.verbose then 
-                print('t: ' .. t)
-                print('classifier_input:'); print(classifier_input);
-                print('classifier_out:'); print(classifier_out);
-                print('batch_labels[j][t]: ' .. batch_labels[j][t])
-                print('loss:'); print(loss);
-                print('output_grad:'); print(output_grad);
+          -- semantic dependency relations (may have multiple heads per word so happens separately)
+          -- TODO merge this case with the regular case
+          if classifier_opt.semdeprel then
+            local classifier_input_rel
+            for k = 1,#batch_heads[j][t] do 
+              if batch_heads[j][t][k] > 0 and batch_labels[j][t][k] > 0 then
+                local head_repr = classifier_input_all[{{}, batch_heads[j][t][k]}]
+                head_repr = head_repr:view(head_repr:nElement())                
+                if classifier_opt.deprel_repr == 'concat' then
+                  classifier_input_rel = torch.cat(classifier_input, head_repr)
+                else 
+                  classifier_input_rel = torch.add(classifier_input, head_repr)
+                end
+                local classifier_out = classifier:forward(classifier_input_rel)
+                loss = loss + criterion:forward(classifier_out, batch_labels[j][t][k])
+                num_words = num_words + 1
+                local output_grad = criterion:backward(classifier_out, batch_labels[j][t][k])
+                classifier:backward(classifier_input_rel, output_grad)
+                confusion:add(classifier_out, batch_labels[j][t][k])
               end
+            end
+            
+          -- regular case
+          else
+          
+            -- dependency relations options
+            if classifier_opt.deprel and batch_heads[j][t] > 0 then
+              --print('batch_heads[j][t]:'); print(batch_heads[j][t])
+              local head_repr = classifier_input_all[{{}, batch_heads[j][t]}]
+              head_repr = head_repr:view(head_repr:nElement())
+              --print('head_repr:'); print(head_repr)
+              --print('classifier_input:'); print(classifier_input)
+              if classifier_opt.deprel_repr == 'concat' then
+                classifier_input = torch.cat(classifier_input, head_repr)
+              else 
+                classifier_input = torch.add(classifier_input, head_repr)
+              end            
+              --print('classifier_input:'); print(classifier_input)
+            end
+            
+            if batch_labels[j][t] == 0 then
+              print('Warning: skipping word with label idx 0')
+            else
+              -- don't classify roots
+              if not classifier_opt.deprel or batch_heads[j][t] > 0 then
               
-              -- update confusion matrix
-              confusion:add(classifier_out, batch_labels[j][t])
+                local classifier_out = classifier:forward(classifier_input)
+                loss = loss + criterion:forward(classifier_out, batch_labels[j][t])
+                num_words = num_words + 1
+                local output_grad = criterion:backward(classifier_out, batch_labels[j][t])
+                classifier:backward(classifier_input, output_grad)
+                
+                if classifier_opt.verbose then 
+                  print('t: ' .. t)
+                  print('classifier_input:'); print(classifier_input);
+                  print('classifier_out:'); print(classifier_out);
+                  print('batch_labels[j][t]: ' .. batch_labels[j][t])
+                  print('loss:'); print(loss);
+                  print('output_grad:'); print(output_grad);
+                end
+                
+                -- update confusion matrix
+                confusion:add(classifier_out, batch_labels[j][t])
+              end
             end
           end
         end    
@@ -589,6 +617,10 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
   if pred_filename then
     pred_file = torch.DiskFile(pred_filename .. '.epoch' .. epoch, 'w')
   end
+  local word_repr_file
+  if pred_file and classifier_opt.write_test_word_repr and classifier_opt.test_word_repr_file then
+    word_repr_file = torch.DiskFile(classifier_opt.test_word_repr_file, 'w')    
+  end
   
   local time = sys.clock()
   classifier:evaluate()
@@ -597,13 +629,13 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
   
   print('\n==> evaluating on ' .. test_or_val .. ' data')
   print('==> epoch: ' .. epoch)
-  local loss, num_words = 0, 0
+  local loss, num_words, word_counter = 0, 0, 0
   for i=1,#data do 
-    xlua.progress(i, #data)
+    xlua.progress(i, #data)    
     local source, target, labels, heads = data[i][1]
     if opt.gpuid >= 0 then source = source:cuda() end
     if classifier_opt.enc_or_dec == 'enc' then
-      if classifier_opt.deprel then
+      if classifier_opt.deprel or classifier_opt.semdeprel then
         heads = data[i][2]
         labels = data[i][3]
       else
@@ -788,6 +820,17 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
       end
     end
     
+    -- write out representations if needed
+    if classifier_opt.write_test_word_repr and word_repr_file then
+      for t = 1, classifier_input_all:size(2) do
+        word_counter = word_counter + 1
+        local word_repr = classifier_input_all[{{}, t}]
+        word_repr = word_repr:view(word_repr:nElement()) 
+        word_repr_file:writeString(tostring(word_counter) .. ' ')
+        word_repr_file:writeDouble(word_repr:double():storage())        
+      end
+    end
+    
     -- forward classifier    
     local pred_labels = {}
     for t = 1, classifier_input_all:size(2) do
@@ -815,36 +858,82 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
         classifier_input = classifier_input[{ {offset+1, classifier_input:size(1)} }]
       end
       
-      -- dependency relations options
-      if classifier_opt.deprel and heads[t] > 0 then
-        local head_repr = classifier_input_all[{{}, heads[t]}]
-        head_repr = head_repr:view(head_repr:nElement())
-        if classifier_opt.deprel_repr == 'concat' then
-          classifier_input = torch.cat(classifier_input, head_repr)
-        else 
-          classifier_input = torch.add(classifier_input, head_repr)
-        end            
-      end
-      
-      if labels[t] == 0 then
-        print('Warning: skipping word with label idx 0')
-      else
-        -- don't classify roots
-        if not classifier_opt.deprel or heads[t] > 0 then
-                          
-          local classifier_out = classifier:forward(classifier_input)
-          -- get predicted labels to write to file
-          if pred_file then
-            local _, pred_idx =  classifier_out:max(1)
-            pred_idx = pred_idx:long()[1]
-            local pred_label = idx2label[pred_idx]
-            table.insert(pred_labels, pred_label)
+            
+      -- semantic dependency relations (may have multiple heads per word so happens separately)
+      -- TODO merge this case with the regular case
+      if classifier_opt.semdeprel then
+        local cur_pred_labels = {}
+        local classifier_input_rel
+        for k = 1,#heads[t] do           
+          if heads[t][k] > 0 and labels[t][k] > 0 then
+            local head_repr = classifier_input_all[{{}, heads[t][k]}]
+            head_repr = head_repr:view(head_repr:nElement())            
+            if classifier_opt.deprel_repr == 'concat' then
+              classifier_input_rel = torch.cat(classifier_input, head_repr)
+            else 
+              classifier_input_rel = torch.add(classifier_input, head_repr)
+            end
+            
+            local classifier_out = classifier:forward(classifier_input_rel)
+            loss = loss + criterion:forward(classifier_out, labels[t][k])
+            
+            if pred_file then
+              local _, pred_idx =  classifier_out:max(1)
+              pred_idx = pred_idx:long()[1]
+              local pred_label = idx2label[pred_idx]
+              table.insert(cur_pred_labels, pred_label)
+            end
+            
+            num_words = num_words + 1
+            confusion:add(classifier_out, labels[t][k])
+            
+          else
+            if pred_file then
+              -- insert null label
+              table.insert(cur_pred_labels, '_')
+            end
           end
-          
-          loss = loss + criterion:forward(classifier_out, labels[t])
-          num_words = num_words + 1
-          
-          confusion:add(classifier_out, labels[t])
+        end
+        
+        if pred_file then
+          -- combine multiple heads
+          table.insert(pred_labels, stringx.join('|', cur_pred_labels))
+        end
+        
+      -- regular case
+      else
+      
+        -- dependency relations options
+        if classifier_opt.deprel and heads[t] > 0 then
+          local head_repr = classifier_input_all[{{}, heads[t]}]
+          head_repr = head_repr:view(head_repr:nElement())
+          if classifier_opt.deprel_repr == 'concat' then
+            classifier_input = torch.cat(classifier_input, head_repr)
+          else 
+            classifier_input = torch.add(classifier_input, head_repr)
+          end            
+        end
+        
+        if labels[t] == 0 then
+          print('Warning: skipping word with label idx 0')
+        else
+          -- don't classify roots
+          if not classifier_opt.deprel or heads[t] > 0 then
+                            
+            local classifier_out = classifier:forward(classifier_input)
+            -- get predicted labels to write to file
+            if pred_file then
+              local _, pred_idx =  classifier_out:max(1)
+              pred_idx = pred_idx:long()[1]
+              local pred_label = idx2label[pred_idx]
+              table.insert(pred_labels, pred_label)
+            end
+            
+            loss = loss + criterion:forward(classifier_out, labels[t])
+            num_words = num_words + 1
+            
+            confusion:add(classifier_out, labels[t])
+          end
         end
       end
     end
@@ -872,6 +961,7 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
   confusion:zero()
   
   if pred_file then pred_file:close() end
+  if word_repr_file then word_repr_file:close() end
   return loss
   
 end
@@ -880,7 +970,7 @@ end
 function load_data(classifier_opt, label2idx)
   local train_data, val_data, test_data
   if classifier_opt.enc_or_dec == 'enc' then
-    if classifier_opt.deprel then 
+    if classifier_opt.deprel or classifier_opt.semdeprel then 
       unknown_labels = 0
       train_data = load_source_head_data(classifier_opt.train_source_file, classifier_opt.train_head_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len) 
       print('==> words with unknown labels in train data: ' .. unknown_labels)
@@ -927,13 +1017,12 @@ function load_source_data(file, label_file, label2idx, max_sent_len)
     else
       source, _ = beam.sent2charidx(line, char2idx, model_opt.max_word_l, model_opt.start_symbol)
     end    
-    local label_idx = {}
+    local label_idx, idx = {}
     for label in labels:gmatch'([^%s]+)' do
       if label2idx[label] then
         idx = label2idx[label]
       else
-        print('Warning: unknown label ' .. label .. ' in line: ' .. line .. ' with labels: ' .. labels)
-        print('Warning: using idx 0 for unknown')
+        print('Warning: using idx 0 for unknown label ' .. label .. ' in line: ' .. line .. ' with labels: ' .. labels)
         idx = 0
         unknown_labels = unknown_labels + 1
       end
@@ -969,13 +1058,12 @@ function load_source_target_data(source_file, target_file, target_label_file, la
       target, _ = beam.sent2wordidx(target_line, word2idx_targ, 1)
     end
     
-    local label_idx = {}
+    local label_idx, idx = {}
     for label in labels:gmatch'([^%s]+)' do
       if label2idx[label] then
         idx = label2idx[label]
       else
-        print('Warning: unknown label ' .. label .. ' in target line: ' .. target_line .. ' with labels: ' .. labels)
-        print('Warning: using idx 0 for unknown')
+        print('Warning: using idx 0 for unknown label ' .. label .. ' in target line: ' .. target_line .. ' with labels: ' .. labels)
         idx = 0
         unknown_labels = unknown_labels + 1
       end
@@ -994,28 +1082,55 @@ function load_source_head_data(file, head_file, label_file, label2idx, max_sent_
   local max_sent_len = max_sent_len or math.huge
   local data = {}
   for line, head_line, labels in seq.zip3(io.lines(file), io.lines(head_file), io.lines(label_file)) do
-    sent = beam.clean_sent(line)
+    --print(line)
+    --print(head_line)
+    --print(labels)
+    --print('------------------------')
+    --sent = beam.clean_sent(line)
     local source
     if model_opt.use_chars_enc == 0 then
       source, _ = beam.sent2wordidx(line, word2idx_src, model_opt.start_symbol)
     else
       source, _ = beam.sent2charidx(line, char2idx, model_opt.max_word_l, model_opt.start_symbol)
-    end    
-    local label_idx = {}
+    end
+    if source:dim() == 0 then
+      print('Warning: empty source vector in line ' .. line)
+    end
+    local label_idx, idx = {}
     for label in labels:gmatch'([^%s]+)' do
-      if label2idx[label] then
-        idx = label2idx[label]
+      if classifier_opt.semdeprel then 
+        idx = {}
+        for _, l in pairs(stringx.split(label, '|')) do
+          if label2idx[l] then
+            table.insert(idx, label2idx[l])
+          else
+            print('Warning: using idx 0 for unknown label ' .. label .. ' in line: ' .. line .. ' with labels: ' .. labels)
+            table.insert(idx, 0)
+            unknown_labels = unknown_labels + 1
+          end
+        end        
       else
-        print('Warning: unknown label ' .. label .. ' in line: ' .. line .. ' with labels: ' .. labels)
-        print('Warning: using idx 0 for unknown')
-        idx = 0
-        unknown_labels = unknown_labels + 1
+        if label2idx[label] then
+          idx = label2idx[label]
+        else
+          print('Warning: using idx 0 for unknown label ' .. label .. ' in line: ' .. line .. ' with labels: ' .. labels)
+          idx = 0
+          unknown_labels = unknown_labels + 1
+        end
       end
       table.insert(label_idx, idx)
     end
     local heads = {}
     for head in head_line:gmatch'([^%s]+)' do
-      table.insert(heads, tonumber(head))
+      if classifier_opt.semdeprel then
+        local multheads = {}
+        for _, h in pairs(stringx.split(head, '|')) do
+          table.insert(multheads, tonumber(h))
+        end
+        table.insert(heads, multheads)
+      else
+        table.insert(heads, tonumber(head))
+      end
     end
     if #label_idx <= max_sent_len then
       table.insert(data, {source, heads, label_idx})
@@ -1025,13 +1140,23 @@ function load_source_head_data(file, head_file, label_file, label2idx, max_sent_
 end
 
 
-function get_labels(label_file)
+function get_labels(label_file, multilabel)
   local label2idx, idx2label = {}, {}
   for line in io.lines(label_file) do
     for label in line:gmatch'([^%s]+)' do
-      if not label2idx[label] then
-        idx2label[#idx2label+1] = label
-        label2idx[label] = #idx2label
+      -- if word has more than one label, separated by "|"
+      if multilabel then
+        for _, l in pairs(stringx.split(label, '|')) do
+          if not label2idx[l] then
+            idx2label[#idx2label+1] = l
+            label2idx[l] = #idx2label
+          end
+        end
+      else
+        if not label2idx[label] then
+          idx2label[#idx2label+1] = label
+          label2idx[label] = #idx2label
+        end
       end
     end
   end

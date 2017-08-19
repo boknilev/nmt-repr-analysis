@@ -80,13 +80,17 @@ cmd:option('-cl_use_min_attn', false, 'Whether to use the representation of the 
 cmd:option('-cl_use_rand_attn', false, 'Whether tn use the representation of a random attended word')
 cmd:option('-cl_no_dec_repr', false, 'Whether to not use decoder word representation; can apply only if one of cl_use_max/min/rand_attn options are given')
 -- dependency relation options
-cmd:option('-cl_deprel', false, 'Whether to predict dependency relations')
+cmd:option('-cl_deprel', false, 'Whether to predict syntactic dependency relations')
+cmd:option('-cl_semdeprel', false, 'Wehter to predict semantic dependency relations')
 cmd:option('-cl_deprel_repr', 'concat', 'Aggregation method for predicting dependency relations (concat | sum)')
 cmd:option('-cl_skip_root', true, 'Whether to skip the root (head index 0)')
 -- use linear classifier instead?
 cmd:option('-cl_linear_classifier', false, 'Whether to use a linear classifier')
 -- debug
 cmd:option('-cl_verbose', false, 'Print a lot of information')
+-- write word representations
+cmd:option('-cl_write_test_word_repr', false, 'Whether to write word representations to file (must specify cl_test_word_repr_file)')
+cmd:option('-cl_test_word_repr_file', '', 'Path to file to write word representations of test data (should be full path)')
 
 
 function copy(orig)
