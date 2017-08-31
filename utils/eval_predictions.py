@@ -6,6 +6,10 @@ Usage: eval_predictions.py [--train_lbl_file train_lbl_file] [--train_file train
                             [--fig_pref fig_pref] [--test_pred_file2 test_pred_file2] 
                             [--label1 label1] [--label2 label2] [--annotation annotation] 
                             [--fine2coarse_file fine2coarse_file] 
+                            [--filter_tags_file filter_tags_file]
+                            [--tag_names_file tag_names_file]
+                            [--multi_label] 
+                            [--test_head_file test_head_file] [--train_head_file train_head_file]
                             TEST_GOLD_FILE TEST_PRED_FILE
 
 Arguments:
@@ -23,7 +27,12 @@ Options:
   --label1 label1                        string label for model 1 when comparing two predictions
   --label2 label2                        string label for model 2 when comparing two predictions
   --annotation annotation                annotation type: pos, morph (for plot title)
-  --fine2coarse_file fine2coarse_file    File with mapping from fine to coarse tags (for semtags) 
+  --fine2coarse_file fine2coarse_file    file with mapping from fine to coarse tags (for semtags) 
+  --filter_tags_file filter_tags_file    file with tags to exsclude from evaluation 
+  --tag_names_file tag_names_file        file mapping from tag to a nice name for the tag
+  --multi_label                          whether to split multiple labels (separated by "|")
+  --test_head_file test_head_file        file with test relation heads (to compute accuracy by relation distance)
+  --train_head_file train_head_file      file with train relation heads (to compute majority baseline)
 """
 
 from docopt import docopt
@@ -38,8 +47,10 @@ import codecs, operator, sys
 UNK_TAG = 'UNK'
 
 
-def get_predictions(gold_filename, pred_filename):
+def get_predictions(gold_filename, pred_filename, multi_label=False, multi_label_sep='|'):
     """ Get gold and predicted tags
+    
+    multi_label: if True, split tags on multi_label_sep    
     
     return (gold, pred, tags): gold and pred are lists of tags
                                 tags is a sorted list of unique tags
@@ -53,15 +64,24 @@ def get_predictions(gold_filename, pred_filename):
             for gold_line, pred_line in izip(f_gold, f_pred):
                 assert len(gold_line.split()) == len(pred_line.split()), 'incompatible lines:\ngold: ' + gold_line + 'pred: ' + pred_line
                 for gold_tag, pred_tag in zip(gold_line.strip().split(), pred_line.strip().split()):
-                    gold.append(gold_tag)
-                    pred.append(pred_tag)
-                    tags.add(gold_tag)
+                    if multi_label:
+                        for g, p in zip(gold_tag.split(multi_label_sep), pred_tag.split(multi_label_sep)):
+                            gold.append(g)
+                            pred.append(p)
+                            tags.add(g)
+                    else:
+                        gold.append(gold_tag)
+                        pred.append(pred_tag)
+                        tags.add(gold_tag)
                     
     tags = sorted(tags)    
     return gold, pred, tags
     
 
 def eval_predictions(gold, pred, tags, confusion_matrix_filename=None, fig_num=1):
+    
+    # allow printing large confusion matrices (from http://stackoverflow.com/questions/1987694/print-the-full-numpy-array)
+    np.set_printoptions(threshold=np.inf)    
     
     cm = metrics.confusion_matrix(gold, pred, tags)
     print 'confusion matrix:'
@@ -85,21 +105,41 @@ def eval_predictions(gold, pred, tags, confusion_matrix_filename=None, fig_num=1
     f1_micro = metrics.f1_score(gold, pred, average='micro')
     f1_macro = metrics.f1_score(gold, pred, average='macro')
     f1_weighted = metrics.f1_score(gold, pred, average='weighted')
+    precision_micro = metrics.precision_score(gold, pred, average='micro')
+    precision_macro = metrics.precision_score(gold, pred, average='macro')
+    precision_weighted = metrics.precision_score(gold, pred, average='weighted')
+    recall_micro = metrics.recall_score(gold, pred, average='micro')
+    recall_macro = metrics.recall_score(gold, pred, average='macro')
+    recall_weighted = metrics.recall_score(gold, pred, average='weighted')
     print 'F1 micro:', f1_micro, 'F1 macro:', f1_macro, 'F1 weighted:', f1_weighted
+    print 'Precision micro:', precision_micro, 'Precision macro:', precision_macro, 'Precision weighted:', precision_weighted
+    print 'Recall micro:', recall_micro, 'Recall macro:', recall_macro, 'Recall weighted:', recall_weighted    
+    print 'F1 scroes:'
+    print '\t'.join([str(round(score, 4)) for score in metrics.f1_score(gold, pred, tags, average=None)])
+    
+    # go back to default printing threshold
+    np.set_printoptions(threshold=1000)
+    
     return fig_num+2
                 
 
-def plot_confusion_matrix(cm, tags, title, filename):
+def plot_confusion_matrix(cm, tags, title, filename, cmap=plt.cm.Blues):
     
-    plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    # temp
+    import matplotlib as mpl
+    norm = mpl.colors.Normalize(vmin=0, vmax=1)
+    # remove diagonal
+    #for i in xrange(len(cm[0])):
+    #    cm[i][i] = 0
+    plt.imshow(cm, interpolation='nearest', cmap=cmap, norm=norm)
     plt.title(title)
     plt.colorbar()
     tick_marks = np.arange(len(tags))
-    plt.xticks(tick_marks, tags, rotation=90, size='x-small')
-    plt.yticks(tick_marks, tags, size='x-small')
-    #plt.tight_layout()
+    plt.xticks(tick_marks, tags, rotation=90, size='xx-small')
+    plt.yticks(tick_marks, tags, size='xx-small')
     plt.ylabel('True')
     plt.xlabel('Predicted')
+    plt.tight_layout()
     if filename:
         plt.savefig(filename, bbox_inches='tight')
 
@@ -188,6 +228,7 @@ def eval_predictions_by_freq(gold, pred, tags, freq_dict, words=None, cumulative
             op_str = '='
         
         print 'accuracy for train {} freq {} {}: {}'.format('word' if words else 'tag', op_str, freq, accuracy)
+        #print 'unique filtered gold words:', set(filtered_gold)
         freqs.append(freq)
         accuracies.append(accuracy)
         #print 'score report for train freq {}:'.format(freq)
@@ -326,6 +367,21 @@ def get_flat_words(filename, encoding='utf-8'):
             for word in line.strip().split():
                 words.append(word)
     return words
+
+
+def get_flat_labels(filename, multi_label=False, multi_label_sep='|'):
+    """ Get flattened list of labels """
+    
+    labels = []
+    with open(filename) as f:
+        for line in f:
+            for label in line.strip().split():
+                if multi_label:
+                    for l in label.split(multi_label_sep):
+                        labels.append(l)
+                else:
+                    labels.append(label)
+    return labels
     
 
 def get_ambig_words(filename, lbl_filename, encoding='utf-8'):
@@ -372,6 +428,60 @@ def eval_predictions_by_ambiguity(gold, pred, words, ambig, nonambig, tags, fig_
     print 'evaluating unseen words'
     fig_num = eval_predictions(gold_unseen, pred_unseen, tags, fig_pref + '.unseen.cm.png' if fig_pref else None, fig_num=fig_num)
     return fig_num
+    
+    
+def eval_predictions_by_rel_distance(gold, pred, dists, filename=None, fig_num=2000):
+
+    assert len(gold) == len(pred) and len(pred) == len(dists), 'incompatible gold/pred/dists in eval_predictions_by_rel_distance'    
+    #counts, bins = np.histogram(dists, bins='auto')
+    #counts, bins = np.histogram(dists, bins='fd')
+    #counts, bins = np.histogram(dists, bins=range(0, 10) + range(10, 40, 5) + range(40, np.max(dists)+10, 10))
+    #counts, bins = np.histogram(dists, bins=range(0, 6) + range(10, 40, 10) + range(40, np.max(dists)+10, 10))
+    #counts, bins = np.histogram(dists, bins=range(0, 6) + range(6, 11, 2) + [np.max(dists)+1])
+    counts, bins = np.histogram(dists, bins=[1,2,3,4,5,6,8,11,np.max(dists)+1])
+    #print np.max(dists)
+    print 'counts:', '\t'.join([str(c) for c in counts])
+    print 'bins:', '\t'.join([str(b) for b in bins])
+    #bins[-1] = np.max(dists)+1
+    #print bins
+    binplace = np.digitize(dists, bins)
+    correct_per_bin = np.zeros(len(counts), dtype='float')
+    for i in xrange(len(gold)):
+        if dists[i] == 0:
+            print i, binplace[i], dists[i], gold[i], pred[i]        
+        if gold[i] == pred[i]:
+            correct_per_bin[binplace[i] - 1] += 1
+    #print correct_per_bin
+    accuracy_per_bin = correct_per_bin / counts
+    print 'accuracy per bin:'
+    print '\t'.join([str(a) for a in accuracy_per_bin])
+    if filename:
+        print 'plotting'
+        plt.figure(fig_num)
+        plt.bar(range(len(bins)-1), accuracy_per_bin)
+        plt.xticks(np.arange(len(bins)-1), ('1','2','3','4','5','6-7','8-10','>10'), size='large')
+        plt.title('Accuracy per Relation Distance', fontweight='demibold')
+        plt.xlabel('Distance', size='large', fontweight='demibold')
+        plt.ylabel('Accuracy', size='large', fontweight='demibold')     
+        plt.savefig(filename)
+    return fig_num
+    
+
+def get_relation_distances(head_filename, multi_label=False, multi_label_sep='|'):
+    
+    dists = []
+    with open(head_filename) as f:
+        for line in f:
+            splt = line.strip().split()
+            for i in xrange(len(splt)):
+                if multi_label:
+                    for h in splt[i].split(multi_label_sep):
+                        if int(h) > 0:
+                            dists.append(np.abs(int(h)-i-1))
+                else:
+                    if int(splt[i]) > 0:
+                        dists.append(np.abs(int(splt[i])-i-1))
+    return dists        
 
 
 def assign_majority_baseline(train_gold, train_words, test_words):
@@ -400,26 +510,124 @@ def assign_majority_baseline(train_gold, train_words, test_words):
     return local_pred, global_pred
 
 
+def assign_global_majority_baseline(train_gold_tags):
+    """ Find the global majority baseline """
+    
+    tag2count = dict()
+    for g in train_gold_tags:
+        tag2count[g] = tag2count.get(g, 0) + 1
+    majority_tag, majority_count = sorted(tag2count.items(), key=operator.itemgetter(1), reverse=True)[0]
+    print 'global majority tag:', majority_tag, 'count:', majority_count
+    return majority_tag
+
+
+def assign_majority_baseline_rel(train_gold, train_words, train_head_words, test_words, test_head_words):
+
+    tag2count, wordhead2tag2count = dict(), dict()
+    for g, w, h in zip(train_gold, train_words, train_head_words):
+        tag2count[g] = tag2count.get(g, 0) + 1
+        wh = w + '__' + h
+        if wh in wordhead2tag2count:
+            wordhead2tag2count[wh][g] = wordhead2tag2count[wh].get(g, 0) + 1
+        else:
+            wordhead2tag2count[wh] = {g: 1}
+    majority_tag, majority_count = sorted(tag2count.items(), key=operator.itemgetter(1), reverse=True)[0]
+    print 'global majority tag:', majority_tag, 'count:', majority_count
+    local_pred = []
+    for w, h in zip(test_words, test_head_words):
+        wh = w + '__' + h
+        if wh in wordhead2tag2count:
+            most_freq_tag, _ = sorted(wordhead2tag2count[wh].items(), key=operator.itemgetter(1), reverse=True)[0]
+            local_pred.append(most_freq_tag)
+        else:
+            local_pred.append(majority_tag)
+    global_pred = [majority_tag]*len(local_pred)
+    return local_pred, global_pred
+
+
+def load_word_heads(word_filename, head_filename, multi_label=False, multi_label_sep='|', encoding='utf-8'):
+
+    with codecs.open(word_filename, encoding='utf-8') as f_word:
+        with open(head_filename) as f_head:
+            words, head_words = [], []
+            for word_line, head_line in izip(f_word, f_head):
+                cur_words = word_line.strip().split()
+                cur_heads = head_line.strip().split()
+                assert len(cur_words) == len(cur_heads), 'incompatible words and heads in word_line: ' + word_line + ' and head_line: ' + head_line
+                for i in xrange(len(cur_words)):
+                    if multi_label:
+                        multi_heads = cur_heads[i].split(multi_label_sep)
+                        for j in xrange(len(multi_heads)):
+                            if int(multi_heads[j]) > 0:
+                                words.append(cur_words[i])
+                                head_words.append(cur_words[int(multi_heads[j])-1])
+                                
+                    else:
+                        if int(cur_heads[i]) > 0:
+                            words.append(cur_words[i])
+                            head_words.append(cur_words[int(cur_heads[i])-1])
+    return words, head_words
+
+
 def load_fine2coarse_map(map_filename):
     """ Load mapping of fine to coarse tags """
 
-    fine2coarse = dict()
+    fine2coarse, coarse2fine = dict(), dict()
     with open(map_filename) as f:
         for line in f:
             fine, coarse = line.strip().split()
             fine2coarse[fine] = coarse
-    return fine2coarse
+            if coarse in coarse2fine:
+                coarse2fine[coarse].add(fine)
+            else:
+                coarse2fine[coarse] = {fine}
+    return fine2coarse, coarse2fine
+
+
+def filter_by_tag_list(gold, pred, tags, multi_label=False, multi_label_sep='|'):
+    
+    filtered_gold, filtered_pred, allowed_ids = [], [], []
+    count = 0
+    for g, p in zip(gold, pred):
+        if multi_label:
+            for gg, pp in zip(g.split(multi_label_sep), p.split(multi_label_sep)):
+                if gg not in tags:
+                    filtered_gold.append(gg)
+                    filtered_pred.append(pp)
+                    allowed_ids.append(count)
+                count += 1
+        else:
+            if g not in tags: # and p not in tags:
+                filtered_gold.append(g)
+                filtered_pred.append(p)
+                allowed_ids.append(count)
+            count += 1
+    return filtered_gold, filtered_pred, allowed_ids
+    
+
+def load_tag_names(filename):
+    
+    tag2name = dict()
+    with open(filename) as f:
+        for line in f:
+            tag, name = line.strip().split()
+            if tag in tag2name:
+                sys.stderr.write('Warning: already seen tag ' + tag + ' in load_tag_names')
+            tag2name[tag] = name
+    return tag2name
 
 
 def run(gold_filename, pred_filename, train_lbl_filename=None, 
         train_filename=None, test_filename=None, fig_pref=None,
-        test_pred_file2=None, label1='model 1', label2='model 2', annotation='', scale_acc=100.0, fine2coarse_filename=None):
+        test_pred_file2=None, label1='model 1', label2='model 2', annotation='', 
+        scale_acc=100.0, fine2coarse_filename=None, filter_tags_filename=None,
+        tag_names_filename=None, multi_label=False, test_head_filename=None, train_head_filename=None):
 
-    gold, pred, tags = get_predictions(gold_filename, pred_filename)    
+    gold, pred, tags = get_predictions(gold_filename, pred_filename, multi_label=multi_label)    
     fig_num = 1
     fig_num = eval_predictions(gold, pred, tags, fig_pref + '.cm.png' if fig_pref else None, fig_num=fig_num)
     if test_pred_file2:
-        gold2, pred2, tags2 = get_predictions(gold_filename, test_pred_file2)
+        gold2, pred2, tags2 = get_predictions(gold_filename, test_pred_file2, multi_label=multi_label)
     if train_lbl_filename:
         tag_freq_dict = get_freq_dict(train_lbl_filename)
         print 'evaluating predictions by tag frequency'
@@ -482,9 +690,15 @@ def run(gold_filename, pred_filename, train_lbl_filename=None,
             fig_num += 1
             fig_filename = fig_pref + '.tagfreq.cum.maxfreq.compare.png'
             plot_accuracy_by_freq_compare(freqs, accuracies, freqs2, accuracies2, label1, label2, fig_title, fig_filename, scale_acc=scale_acc)
+            
+        print 'evaluating global majority baseline'
+        train_gold = get_flat_words(train_lbl_filename)
+        train_majority_tag = assign_global_majority_baseline(train_gold)
+        pred_majority_global = [train_majority_tag]*len(gold)
+        eval_predictions(gold, pred_majority_global, tags)
 
 
-    if train_lbl_filename and train_filename and test_filename:
+    if train_lbl_filename and train_filename and test_filename and (not test_head_filename):
         # majority baseline
         print 'getting majority baseline'
         train_gold = get_flat_words(train_lbl_filename)
@@ -581,7 +795,7 @@ def run(gold_filename, pred_filename, train_lbl_filename=None,
 
     if fine2coarse_filename:
         print 'mapping fine to coarse tags'
-        fine2coarse = load_fine2coarse_map(fine2coarse_filename)
+        fine2coarse, coarse2fine = load_fine2coarse_map(fine2coarse_filename)
         gold_coarse = [fine2coarse.get(g, g) for g in gold]
         pred_coarse = [fine2coarse.get(p, p) for p in pred]
         tags_coarse = list(set(gold_coarse))
@@ -589,7 +803,111 @@ def run(gold_filename, pred_filename, train_lbl_filename=None,
         eval_predictions(gold_coarse, pred_coarse, tags_coarse)
         fig_num += 1
         fig_num = eval_predictions(gold_coarse, pred_coarse, tags, fig_pref + '.coarse.cm.png' if fig_pref else None, fig_num=fig_num)
+                
+        print 'Evaluating predictions per coarse tag'
+        print '====================================='
+        coarse2gold_pred = dict() # map from coarse gold tag to tuple of (gold, pred), two lists of gold and predicted tags
+        for g, p in zip(gold, pred):
+            gold_coarse = fine2coarse.get(g, g)
+            if gold_coarse in coarse2gold_pred:
+                coarse2gold_pred[gold_coarse][0].append(g)
+                coarse2gold_pred[gold_coarse][1].append(p)
+            else:
+                coarse2gold_pred[gold_coarse] = [[g], [p]]
 
+#        print 'Micro-average in each coarse category, based on statistics only in this category'
+#        print '=====================================\n'
+#        for coarse in coarse2gold_pred:
+#            print 'Evaluating predictions for coarse tag:', coarse
+#            cur_gold = coarse2gold_pred[coarse][0]
+#            cur_pred = coarse2gold_pred[coarse][1]
+#            cur_tags = list(set(cur_gold))
+#            eval_predictions(cur_gold, cur_pred, cur_tags)
+
+
+        print        
+        print 'Micro-average in each coarse category, based on statistics across the entire dataset'
+        print '====================================='            
+        # compute statiscs
+        fine2tp, fine2fp, fine2fn = dict(), dict(), dict()
+        for g, p in zip(gold, pred):
+            if g == p:
+                fine2tp[g] = fine2tp.get(g, 0.0) + 1
+            else:
+                fine2fp[p] = fine2fp.get(p, 0.0) + 1
+                fine2fn[g] = fine2fn.get(g, 0.0) + 1
+        tags_fine = sorted(set(gold))
+#        for fine in tags_fine:
+#            if fine in fine2tp or fine in fine2fp:
+#                precision = 100.0*fine2tp.get(fine, 0.0)/(fine2tp.get(fine, 0.0)+fine2fp.get(fine, 0.0))
+#            else:
+#                precision = np.nan
+#            if fine in fine2tp or fine in fine2fn:
+#                recall = 100.0*fine2tp.get(fine, 0.0)/(fine2tp.get(fine, 0.0)+fine2fn.get(fine, 0.0))
+#            else:
+#                recall = np.nan
+#            print 'tag', fine, 'precision:', precision, 'recall', recall
+        print '\t'.join(['Coarse-tag', 'Micro-precision', 'Micro-recall'])        
+        for coarse in sorted(coarse2gold_pred.keys()):
+            #print 'coarse:', coarse
+            if coarse not in coarse2fine:
+                continue
+            tp, fp, fn = 0.0, 0.0, 0.0
+            for fine in coarse2fine[coarse]:
+                tp += fine2tp.get(fine, 0.0)
+                fp += fine2fp.get(fine, 0.0)
+                fn += fine2fn.get(fine, 0.0)
+            #print tp, fp, fn
+            try:
+                print '\t'.join([str(coarse), str(100.0*tp/(tp+fp)), str(100.0*tp/(tp+fn))])
+            except ZeroDivisionError, e:
+                print 'problem with tag:', coarse
+                print e
+            print
+
+
+    if filter_tags_filename:
+        print 'filtering tags by file:', filter_tags_filename
+        with open(filter_tags_filename) as f_filter_tags:
+            filter_tags = set(f_filter_tags.read().split())
+        filtered_gold, filtered_pred, allowed_ids = filter_by_tag_list(gold, pred, filter_tags, multi_label=multi_label)
+        allowed_tags = sorted(set(tags).difference(filter_tags))
+        
+        if tag_names_filename:
+            tag2name = load_tag_names(tag_names_filename)
+            print tag2name
+            filtered_gold = [tag2name.get(g, g) for g in filtered_gold]
+            filtered_pred = [tag2name.get(p, p) for p in filtered_pred]
+            allowed_tags = [tag2name.get(t, t) for t in allowed_tags]
+
+        fig_num += 1
+        fig_num = eval_predictions(filtered_gold, filtered_pred, allowed_tags, fig_pref + '.filtered.tags.cm.png' if fig_pref else None, fig_num=fig_num)        
+
+    
+        if test_head_filename:
+            print 'evaluating by relation distance (1)'
+            dists = get_relation_distances(test_head_filename, multi_label=multi_label)
+            filtered_dists = np.array(dists)[allowed_ids]
+            fig_num += 1
+            fig_num = eval_predictions_by_rel_distance(filtered_gold, filtered_pred, filtered_dists, fig_pref + '.rel.dist1.png' if fig_pref else None, fig_num=fig_num)
+            
+    if test_head_filename:
+        print 'evaluating by relation distance (2)'
+        dists = get_relation_distances(test_head_filename, multi_label=multi_label)
+        fig_num += 1
+        fig_num = eval_predictions_by_rel_distance(gold, pred, dists, fig_pref + '.rel.dist2.png' if fig_pref else None, fig_num=fig_num)
+        
+    if test_head_filename and train_head_filename and test_filename and train_filename and train_lbl_filename:
+        print 'evaluating relation majority baseline'
+
+        test_words, test_head_words = load_word_heads(test_filename, test_head_filename, multi_label=multi_label)
+        train_words, train_head_words = load_word_heads(train_filename, train_head_filename, multi_label=multi_label)
+        train_gold = get_flat_labels(train_lbl_filename, multi_label=multi_label)
+        pred_majority_local, pred_majority_global = assign_majority_baseline_rel(train_gold, train_words, train_head_words, test_words, test_head_words)
+        print 'evaluating relation global majority baseline'
+        eval_predictions(gold, pred_majority_global, tags)
+        print 'evaluating relation local majority baseline'
+        eval_predictions(gold, pred_majority_local, tags)       
 
 
 if __name__ == '__main__':
@@ -603,8 +921,15 @@ if __name__ == '__main__':
         annotation = 'Semtag'
     else:
         annotation = ''
+    multi_label = False
+    if args['--multi_label']:
+        multi_label = True
         
     run(args['TEST_GOLD_FILE'], args['TEST_PRED_FILE'], 
         args['--train_lbl_file'], args['--train_file'], args['--test_file'], 
-        args['--fig_pref'], args['--test_pred_file2'], args['--label1'], args['--label2'], annotation=annotation, fine2coarse_filename=args['--fine2coarse_file'])
+        args['--fig_pref'], args['--test_pred_file2'], args['--label1'], args['--label2'], 
+        annotation=annotation, fine2coarse_filename=args['--fine2coarse_file'], 
+        filter_tags_filename=args['--filter_tags_file'],
+        tag_names_filename=args['--tag_names_file'], multi_label=multi_label,
+        test_head_filename=args['--test_head_file'], train_head_filename=args['--train_head_file'])
     
