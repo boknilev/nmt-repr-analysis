@@ -1,0 +1,39 @@
+Philipp's NMT chaper
+"Similarly, Gu et al. (2016) augment the
+word prediction step of the neural translation model to either translate a word or copy a source word.
+They observe that the attention mechanism is mostly driven by semantics"
+
+"Researchers in deep learning often do not hesitate to claim that intermediate states in neural
+translation models encode semantics or meaning." page 80
+
+Grahm's tutorial on NMT
+Talking about why tree-structured networks are good - "The reason why this is intuitively useful is because each syntactic phrase
+usually also corresponds to a coherent semantic unit" - page 46
+
+Chunk-Based Bi-Scale Decoder for Neural Machine Translation:
+they use chunking in decoding because -
+"Intuitively, we think chunks are more specific in
+semantics, thus could extract more specific source
+context for translation"
+
+Analogs of Linguistic Structure in Deep Representations:
+they write the following -
+"One of the distinguishing features of natural
+language is compositionality: the existence of operations
+like negation and coordination that can be
+applied to utterances with predictable effects on
+meaning. RNN models trained for natural language
+processing tasks have been found to learn
+representations that encode some of this compositional
+structure—for example, sentence representations
+for machine translation encode explicit features
+for certain syntactic phenomena (Shi et al.,
+2016) and represent some semantic relationships
+translationally (Levy et al., 2014)." -- but I dont see how the citation from
+Levy's . Linguistic regularities in sparse and explicit
+word representations fits here.
+
+Google’s Multilingual Neural Machine Translation System: Enabling Zero-Shot Translation:
+"provide early
+evidence of shared semantic representations (interlingua) between languages"
+section 5.1 - small thing about evidence for interlingua
