@@ -37,3 +37,14 @@ Google’s Multilingual Neural Machine Translation System: Enabling Zero-Shot Tr
 "provide early
 evidence of shared semantic representations (interlingua) between languages"
 section 5.1 - small thing about evidence for interlingua
+
+References on the use of semantic information in (non-neural) MT, including semantic roles, which can be relevant to one of the RTE tasks. 
+Seng Yee Chan, Tou Hwee Ng, and David Chiang. 2007. Word Sense Disambiguation Improves Sta- tistical Machine Translation.
+Ding Liu and Daniel Gildea. 2010.Features for Machine Translation.
+Qin Gao and Stephan Vogel. 2011. Utilizing Target- Side Semantic Role Labels to Assist Hierarchical Phrase-based Machine Translation.
+Dekai Wu, Pascale N Fung, Marine Carpuat, Chi-kiu Lo, Yongsheng Yang, and Zhaojun Wu. 2011. Lex- ical Semantics for Statistical Machine Translation.
+Bevan Jones, Jacob Andreas, Daniel Bauer, Moritz Karl Hermann, and Kevin Knight. 2012. Semantics-Based Machine Translation with Hyper- edge Replacement Grammars.
+Marzieh Bazrafshan and Daniel Gildea. 2013. Seman- tic Roles for String to Tree Machine Translation.
+Marzieh Bazrafshan and Daniel Gildea. 2014. Com- paring Representations of Semantic Roles for String-To-Tree Decoding.
+
+
