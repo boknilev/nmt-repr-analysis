@@ -47,4 +47,10 @@ Bevan Jones, Jacob Andreas, Daniel Bauer, Moritz Karl Hermann, and Kevin Knight.
 Marzieh Bazrafshan and Daniel Gildea. 2013. Seman- tic Roles for String to Tree Machine Translation.
 Marzieh Bazrafshan and Daniel Gildea. 2014. Com- paring Representations of Semantic Roles for String-To-Tree Decoding.
 
+Marine Carpuat and Yogarshi Vyas and Xing Niu. 2017 Detecting Cross-Lingual Semantic Divergence for Neural Machine Translation - "use a cross-lingual textual
+entailment system to distinguish sentence
+pairs that are parallel in meaning
+from those that are not, and show that filtering
+out divergent examples from training
+improves translation quality"
 
