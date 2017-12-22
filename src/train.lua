@@ -43,7 +43,7 @@ function main()
     
   -- first pass: get labels
   print('==> first pass: getting labels')
-  label2idx, idx2label = get_labels(classifier_opt.train_lbl_file, classifier_opt.semdeprel, classifier_opt.tagging_level)
+  label2idx, idx2label = get_labels(classifier_opt.train_lbl_file, classifier_opt.semdeprel)
   local classes = {}
   for idx, _ in ipairs(idx2label) do
     table.insert(classes, idx)
@@ -1143,29 +1143,24 @@ function load_source_head_data(file, head_file, label_file, label2idx, max_sent_
 end
 
 
-function get_labels(label_file, multilabel, tagging_level)
+function get_labels(label_file, multilabel)
   local label2idx, idx2label = {}, {}
   for line in io.lines(label_file) do
-    if tagging_level == 0 do
-      for label in line:gmatch'([^%s]+)' do
-        -- if word has more than one label, separated by "|"
-        if multilabel then
-          for _, l in pairs(stringx.split(label, '|')) do
-            if not label2idx[l] then
-              idx2label[#idx2label+1] = l
-              label2idx[l] = #idx2label
-            end
-          end
-        else
-          if not label2idx[label] then
-            idx2label[#idx2label+1] = label
-            label2idx[label] = #idx2label
+    for label in line:gmatch'([^%s]+)' do
+      -- if word has more than one label, separated by "|"
+      if multilabel then
+        for _, l in pairs(stringx.split(label, '|')) do
+          if not label2idx[l] then
+            idx2label[#idx2label+1] = l
+            label2idx[l] = #idx2label
           end
         end
+      else
+        if not label2idx[label] then
+          idx2label[#idx2label+1] = label
+          label2idx[label] = #idx2label
+        end
       end
-    elseif tagging_level == 1 do
-      idx = #idx2label + 1
-      idx2label[idx] = tonumber(stringx.strip(line))
     end
   end
   return label2idx, idx2label
