@@ -58,7 +58,7 @@ function main()
   
   -- second pass: prepare data as vectors
   print('==> second pass: loading data')
-  local train_data, val_data, test_data = load_data(classifier_opt, label2idx)
+  local train_data, val_data, test_data = load_data(classifier_opt, label2idx, classifier_opt.tagging_level)
     
   -- use trained encoder/decoder from MT model
   encoder, decoder = model[1], model[2]
@@ -970,7 +970,7 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
 end
 
 
-function load_data(classifier_opt, label2idx)
+function load_data(classifier_opt, label2idx, tagging_level)
   local train_data, val_data, test_data
   if classifier_opt.enc_or_dec == 'enc' then
     if classifier_opt.deprel or classifier_opt.semdeprel then 
@@ -1164,14 +1164,8 @@ function get_labels(label_file, multilabel, tagging_level)
         end
       end
     elseif tagging_level == 1 do
-      if stringx.startswith(line, "entailed: ") then
-        local label = 1
-        if stringx.endswith(line, "not-entailed") then
-          label = 0
-        end
-        idx = #idx2label + 1
-        idx2label[idx] = label
-      end
+      idx = #idx2label + 1
+      idx2label[idx] = tonumber(stringx.strip(line))
     end
   end
   return label2idx, idx2label
