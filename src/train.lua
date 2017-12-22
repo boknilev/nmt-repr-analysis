@@ -1011,17 +1011,30 @@ function load_data(classifier_opt, label2idx)
 end
 
 
-function load_source_data(file, label_file, label2idx, max_sent_len) 
+function load_source_data(file, label_file, label2idx, max_sent_len, tagging_level)
   local max_sent_len = max_sent_len or math.huge
   local data = {}
   for line, labels in seq.zip(io.lines(file), io.lines(label_file)) do
-    sent = beam.clean_sent(line)
     local source
-    if model_opt.use_chars_enc == 0 then
-      source, _ = beam.sent2wordidx(line, word2idx_src, model_opt.start_symbol)
-    else
-      source, _ = beam.sent2charidx(line, char2idx, model_opt.max_word_l, model_opt.start_symbol)
-    end    
+    local source_orig, source_hyp
+    if tagging_level == 1 then
+      orig_sent, hyp_sent = beam.clean_sents(line)
+      if model_opt.use_chars_enc == 0 then
+        source_orig, _ = beam.sent2wordidx(orig_sent, word2idx_src, model_opt.start_symbol)
+        source_hyp, _ = beam.sent2wordidx(hyp_sent, word2idx_src, model_opt.start_symbol)
+      else
+        source_orig, _ = beam.sent2charidx(orig_sent, char2idx, model_opt.max_word_l, model_opt.start_symbol)
+        source_hyp, _ = beam.sent2charidx(orig_hyp, char2idx, model_opt.max_word_l, model_opt.start_symbol)
+      end
+    end
+    elseif tagging_level == 0 then
+      sent = beam.clean_sent(line)
+      if model_opt.use_chars_enc == 0 then
+        source, _ = beam.sent2wordidx(line, word2idx_src, model_opt.start_symbol)
+      else
+        source, _ = beam.sent2charidx(line, char2idx, model_opt.max_word_l, model_opt.start_symbol)
+      end
+    end
     local label_idx, idx = {}
     for label in labels:gmatch'([^%s]+)' do
       if label2idx[label] then
@@ -1034,7 +1047,11 @@ function load_source_data(file, label_file, label2idx, max_sent_len)
       table.insert(label_idx, idx)
     end
     if #label_idx <= max_sent_len then
-      table.insert(data, {source, label_idx})
+      if tagging_level == 1 then
+        table.insert(data, {source_orig, source_hyp, label_idx})
+      elseif tagging_level == 0 then
+        table.insert(data, {source, label_idx})
+      end
     end
   end
   return data
