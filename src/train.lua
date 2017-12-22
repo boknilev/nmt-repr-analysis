@@ -33,14 +33,17 @@ function main()
     assert(path.exists(classifier_opt.test_target_file), 'test_target_file does not exist')    
   end
   assert(path.exists(classifier_opt.save), 'save dir does not exist')
-  
+ 
+  if not path.exists(classifier_opt.tagging_level) then
+    classifier_opt.tagging_level = 0
+  end
   
   -- number of module for word representation
   module_num = 2*classifier_opt.enc_layer - classifier_opt.use_cell
     
   -- first pass: get labels
   print('==> first pass: getting labels')
-  label2idx, idx2label = get_labels(classifier_opt.train_lbl_file, classifier_opt.semdeprel)
+  label2idx, idx2label = get_labels(classifier_opt.train_lbl_file, classifier_opt.semdeprel, classifier_opt.tagging_level)
   local classes = {}
   for idx, _ in ipairs(idx2label) do
     table.insert(classes, idx)
@@ -1140,23 +1143,34 @@ function load_source_head_data(file, head_file, label_file, label2idx, max_sent_
 end
 
 
-function get_labels(label_file, multilabel)
+function get_labels(label_file, multilabel, tagging_level)
   local label2idx, idx2label = {}, {}
   for line in io.lines(label_file) do
-    for label in line:gmatch'([^%s]+)' do
-      -- if word has more than one label, separated by "|"
-      if multilabel then
-        for _, l in pairs(stringx.split(label, '|')) do
-          if not label2idx[l] then
-            idx2label[#idx2label+1] = l
-            label2idx[l] = #idx2label
+    if tagging_level == 0 do
+      for label in line:gmatch'([^%s]+)' do
+        -- if word has more than one label, separated by "|"
+        if multilabel then
+          for _, l in pairs(stringx.split(label, '|')) do
+            if not label2idx[l] then
+              idx2label[#idx2label+1] = l
+              label2idx[l] = #idx2label
+            end
+          end
+        else
+          if not label2idx[label] then
+            idx2label[#idx2label+1] = label
+            label2idx[label] = #idx2label
           end
         end
-      else
-        if not label2idx[label] then
-          idx2label[#idx2label+1] = label
-          label2idx[label] = #idx2label
+      end
+    elseif tagging_level == 1 do
+      if stringx.startswith(line, "entailed: ") then
+        local label = 1
+        if stringx.endswith(line, "not-entailed") then
+          label = 0
         end
+        idx = #idx2label + 1
+        idx2label[idx] = label
       end
     end
   end

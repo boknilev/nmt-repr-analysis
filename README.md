@@ -4,6 +4,9 @@ This repository contains the code for our paper on analyzing morphology in neura
 
 "What do Neural Machine Translation Models Learn about Morphology?", Yonatan Belinkov, Nadir Durrani, Fahim Dalvi, Hassan Sajjad, and James Glass, ACL 2017. 
 
+## Requirements
+
+Torch - [http://torch.ch/docs/getting-started.html](http://torch.ch/docs/getting-started.html)
 
 ## Instructions
 
@@ -12,6 +15,7 @@ Run `th src/train.lua` with the following mandatory arguments:
 * `model`: NMT model trained with [seq2seq-attn](https://github.com/harvardnlp/seq2seq-attn)
 * `src_dict`: source dictionary used for training the NMT model
 * `targ_dict`: target dictionary used for training the NMT model
+* `cl_tagging_level`: tagging level for the classification task: 0 - means token level, 1 - is sentence entailment
 * `cl_train_lbl_file`: train file with gold labels
 * `cl_val_lbl_file`: validation file with gold labels
 * `cl_test_lbl_file`: test file with gold labels
@@ -27,6 +31,7 @@ For more options, see `src/s2sa/beam.lua`
 
 ### Evaluating saved models
 Once you've run `train.lua` and have some models saved, you can run `th src/eval.lua` with the following arguments to evaluate a model:
+
 * `model`: NMT model trained with [seq2seq-attn](https://github.com/harvardnlp/seq2seq-attn) to extract embeddings
 * `src_dict`: source dictionary used for training the NMT model
 * `targ_dict`: target dictionary used for training the NMT model
@@ -42,7 +47,8 @@ Once you've run `train.lua` and have some models saved, you can run `th src/eval
 If you use this code in your work, please consider citing our paper:
 
 
-```bib
+```
+bib
 @InProceedings{belinkov:2017:acl,
   author    = {Belinkov, Yonatan  and  Durrani, Nadir and Dalvi, Fahim and Sajjad, Hassan and Glass, James},
   title     = {What do Neural Machine Translation Models Learn about Morphology?},
