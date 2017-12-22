@@ -58,7 +58,7 @@ function main()
   
   -- second pass: prepare data as vectors
   print('==> second pass: loading data')
-  local train_data, val_data, test_data = load_data(classifier_opt, label2idx, classifier_opt.tagging_level)
+  local train_data, val_data, test_data = load_data(classifier_opt, label2idx)
     
   -- use trained encoder/decoder from MT model
   encoder, decoder = model[1], model[2]
@@ -226,6 +226,7 @@ function train(train_data, epoch)
     -- prepare mini-batch
     local batch_input, batch_labels, batch_heads = {}, {}, {}
     for j = i,math.min(i+classifier_opt.batch_size-1, #train_data) do
+      -- TODO: figure out how to edit heads and source
       local source = train_data[shuffle[j]][1]      
       if opt.gpuid >= 0 then source = source:cuda() end
       local input, labels, heads = {source}
@@ -456,6 +457,7 @@ function train(train_data, epoch)
         end
         
         -- take encoder/decoder output as input to classifier
+        -- TODO: combine the test and hypothesis sentences in the entailment case
         local classifier_input_all
         if classifier_opt.enc_or_dec == 'dec' then
           -- always ignore start and end sybmols in dec
@@ -970,7 +972,7 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
 end
 
 
-function load_data(classifier_opt, label2idx, tagging_level)
+function load_data(classifier_opt, label2idx)
   local train_data, val_data, test_data
   if classifier_opt.enc_or_dec == 'enc' then
     if classifier_opt.deprel or classifier_opt.semdeprel then 
@@ -985,13 +987,13 @@ function load_data(classifier_opt, label2idx, tagging_level)
       print('==> words with unknown labels in test data: ' .. unknown_labels)      
     else
       unknown_labels = 0
-      train_data = load_source_data(classifier_opt.train_source_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len) 
+      train_data = load_source_data(classifier_opt.train_source_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len, classifier_opt.tagging_level)
       print('==> words with unknown labels in train data: ' .. unknown_labels)
       unknown_labels = 0
-      val_data = load_source_data(classifier_opt.val_source_file, classifier_opt.val_lbl_file, label2idx) 
+      val_data = load_source_data(classifier_opt.val_source_file, classifier_opt.val_lbl_file, label2idx, classifier_opt.tagging_level)
       print('==> words with unknown labels in val data: ' .. unknown_labels)
       unknown_labels = 0
-      test_data = load_source_data(classifier_opt.test_source_file, classifier_opt.test_lbl_file, label2idx)   
+      test_data = load_source_data(classifier_opt.test_source_file, classifier_opt.test_lbl_file, label2idx, classifier_opt.tagging_level)
       print('==> words with unknown labels in test data: ' .. unknown_labels)
     end
   else

@@ -529,6 +529,12 @@ function wordidx2sent(sent, idx2word, source_str, attn, skip_end)
   return table.concat(t, ' ')
 end
 
+function clean_sents(sent)
+  -- assumes the string contains two sentences seperated by |||
+  local s_list = stringx.split(sent, "|||")
+  return clean_sent(s_list[0]), clean_sent(s_list[1])
+end
+
 function clean_sent(sent)
   local s = stringx.replace(sent, UNK_WORD, '')
   s = stringx.replace(s, START_WORD, '')
@@ -750,6 +756,7 @@ return {
   search = search,
   getOptions = getOptions,
   clean_sent = clean_sent,
+  clean_sents = clean_sents,
   sent2charidx = sent2charidx,
   sent2wordidx = sent2wordidx
 }
