@@ -998,15 +998,15 @@ function load_data(classifier_opt, label2idx)
       unknown_labels = 0
       train_data = load_source_entailment_data(classifier_opt.train_source_file, classifier_opt.train_dataset_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len)
       print('==> words with unknown labels in train data: ' .. unknown_labels)
-      assert(unknown_labels == 0, "Training data contained an unknown label)
+      assert(unknown_labels == 0, 'Training data contained an unknown label')
       unknown_labels = 0
       val_data = load_source_entailment_data(classifier_opt.val_source_file, classifier_opt.val_dataset_file, classifier_opt.val_lbl_file, label2idx)
       print('==> words with unknown labels in val data: ' .. unknown_labels)
-      assert(unknown_labels == 0, "Validation data contained an unknown label)
+      assert(unknown_labels == 0, 'Validation data contained an unknown label')
       unknown_labels = 0
       test_data = load_source_entailment_data(classifier_opt.test_source_file, classifier_opt.test_dataset_file, classifier_opt.test_lbl_file, label2idx)
       print('==> words with unknown labels in test data: ' .. unknown_labels)
-      assert(unknown_labels == 0, "Test data contained an unknown label)
+      assert(unknown_labels == 0, 'Test data contained an unknown label')
     else
       unknown_labels = 0
       train_data = load_source_data(classifier_opt.train_source_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len)
