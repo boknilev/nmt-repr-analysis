@@ -33,10 +33,6 @@ function main()
     assert(path.exists(classifier_opt.test_target_file), 'test_target_file does not exist')    
   end
   assert(path.exists(classifier_opt.save), 'save dir does not exist')
- 
-  if not path.exists(classifier_opt.tagging_level) then
-    classifier_opt.tagging_level = 0
-  end
   
   -- number of module for word representation
   module_num = 2*classifier_opt.enc_layer - classifier_opt.use_cell
@@ -987,13 +983,13 @@ function load_data(classifier_opt, label2idx)
       print('==> words with unknown labels in test data: ' .. unknown_labels)      
     else
       unknown_labels = 0
-      train_data = load_source_data(classifier_opt.train_source_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len, classifier_opt.tagging_level)
+      train_data = load_source_data(classifier_opt.train_source_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len)
       print('==> words with unknown labels in train data: ' .. unknown_labels)
       unknown_labels = 0
-      val_data = load_source_data(classifier_opt.val_source_file, classifier_opt.val_lbl_file, label2idx, classifier_opt.tagging_level)
+      val_data = load_source_data(classifier_opt.val_source_file, classifier_opt.val_lbl_file, label2idx)
       print('==> words with unknown labels in val data: ' .. unknown_labels)
       unknown_labels = 0
-      test_data = load_source_data(classifier_opt.test_source_file, classifier_opt.test_lbl_file, label2idx, classifier_opt.tagging_level)
+      test_data = load_source_data(classifier_opt.test_source_file, classifier_opt.test_lbl_file, label2idx)
       print('==> words with unknown labels in test data: ' .. unknown_labels)
     end
   else
@@ -1011,29 +1007,16 @@ function load_data(classifier_opt, label2idx)
 end
 
 
-function load_source_data(file, label_file, label2idx, max_sent_len, tagging_level)
+function load_source_data(file, label_file, label2idx, max_sent_len)
   local max_sent_len = max_sent_len or math.huge
   local data = {}
   for line, labels in seq.zip(io.lines(file), io.lines(label_file)) do
     local source
-    local source_orig, source_hyp
-    if tagging_level == 1 then
-      orig_sent, hyp_sent = beam.clean_sents(line)
-      if model_opt.use_chars_enc == 0 then
-        source_orig, _ = beam.sent2wordidx(orig_sent, word2idx_src, model_opt.start_symbol)
-        source_hyp, _ = beam.sent2wordidx(hyp_sent, word2idx_src, model_opt.start_symbol)
-      else
-        source_orig, _ = beam.sent2charidx(orig_sent, char2idx, model_opt.max_word_l, model_opt.start_symbol)
-        source_hyp, _ = beam.sent2charidx(orig_hyp, char2idx, model_opt.max_word_l, model_opt.start_symbol)
-      end
-    end
-    elseif tagging_level == 0 then
-      sent = beam.clean_sent(line)
-      if model_opt.use_chars_enc == 0 then
-        source, _ = beam.sent2wordidx(line, word2idx_src, model_opt.start_symbol)
-      else
-        source, _ = beam.sent2charidx(line, char2idx, model_opt.max_word_l, model_opt.start_symbol)
-      end
+    sent = beam.clean_sent(line)
+    if model_opt.use_chars_enc == 0 then
+      source, _ = beam.sent2wordidx(line, word2idx_src, model_opt.start_symbol)
+    else
+      source, _ = beam.sent2charidx(line, char2idx, model_opt.max_word_l, model_opt.start_symbol)
     end
     local label_idx, idx = {}
     for label in labels:gmatch'([^%s]+)' do
@@ -1047,11 +1030,7 @@ function load_source_data(file, label_file, label2idx, max_sent_len, tagging_lev
       table.insert(label_idx, idx)
     end
     if #label_idx <= max_sent_len then
-      if tagging_level == 1 then
-        table.insert(data, {source_orig, source_hyp, label_idx})
-      elseif tagging_level == 0 then
-        table.insert(data, {source, label_idx})
-      end
+      table.insert(data, {source, label_idx})
     end
   end
   return data

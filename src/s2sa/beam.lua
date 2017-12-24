@@ -81,7 +81,8 @@ cmd:option('-cl_use_rand_attn', false, 'Whether tn use the representation of a r
 cmd:option('-cl_no_dec_repr', false, 'Whether to not use decoder word representation; can apply only if one of cl_use_max/min/rand_attn options are given')
 -- dependency relation options
 cmd:option('-cl_deprel', false, 'Whether to predict syntactic dependency relations')
-cmd:option('-cl_semdeprel', false, 'Wehter to predict semantic dependency relations')
+cmd:option('-cl_semdeprel', false, 'Wheter to predict semantic dependency relations')
+cmd:option('-cl_entailment', false, 'Whhter to predict entailment between two sentences')
 cmd:option('-cl_deprel_repr', 'concat', 'Aggregation method for predicting dependency relations (concat | sum)')
 cmd:option('-cl_skip_root', true, 'Whether to skip the root (head index 0)')
 -- use linear classifier instead?
