@@ -101,6 +101,13 @@ function main()
     print('==> concatenating head and modifier word representations for predicting dependency relation')
     classifier_input_size = classifier_input_size + word_repr_size
   end
+  if classifier_opt.entailment then
+    -- This assumes that for entailment classification we only want to concat the sentence representations
+    -- and not combine them in any other way
+    -- Rocktaschel et. al.(ICLR 2016) and Bowman et. al. (EMNLP 2015) concat sentence representations too
+    print('==> concatenating test and hypothesis sentence representations for predicting entailment')
+    classifier_input_size = classifier_input_size + classifier_input_size
+  end
   
   
   -- define classifier
@@ -231,6 +238,8 @@ function train(train_data, epoch)
           heads = train_data[shuffle[j]][2]
           table.insert(batch_heads, heads)
           labels = train_data[shuffle[j]][3]
+        elseif classifier_opt.entailment then
+          print('TODO: Extract labels from training data for entailment')
         else
           labels = train_data[shuffle[j]][2]
         end
@@ -639,6 +648,8 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
       if classifier_opt.deprel or classifier_opt.semdeprel then
         heads = data[i][2]
         labels = data[i][3]
+      elseif classifier_opt.entailment then
+        print('TODO: Extract labels from training data for entailment')
       else
         labels = data[i][2]      
       end
@@ -981,6 +992,21 @@ function load_data(classifier_opt, label2idx)
       unknown_labels = 0
       test_data = load_source_head_data(classifier_opt.test_source_file, classifier_opt.test_head_file, classifier_opt.test_lbl_file, label2idx)   
       print('==> words with unknown labels in test data: ' .. unknown_labels)      
+    elseif classifier_opt.entailment then
+      -- if any of these unknown_labels are 0 then there is an issue
+      print('TODO: Extract data for entailment')
+      unknown_labels = 0
+      train_data = load_source_entailment_data(classifier_opt.train_source_file, classifier_opt.train_dataset_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len)
+      print('==> words with unknown labels in train data: ' .. unknown_labels)
+      assert(unknown_labels == 0, "Training data contained an unknown label)
+      unknown_labels = 0
+      val_data = load_source_entailment_data(classifier_opt.val_source_file, classifier_opt.val_dataset_file, classifier_opt.val_lbl_file, label2idx)
+      print('==> words with unknown labels in val data: ' .. unknown_labels)
+      assert(unknown_labels == 0, "Validation data contained an unknown label)
+      unknown_labels = 0
+      test_data = load_source_entailment_data(classifier_opt.test_source_file, classifier_opt.test_dataset_file, classifier_opt.test_lbl_file, label2idx)
+      print('==> words with unknown labels in test data: ' .. unknown_labels)
+      assert(unknown_labels == 0, "Test data contained an unknown label)
     else
       unknown_labels = 0
       train_data = load_source_data(classifier_opt.train_source_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len)
@@ -1140,6 +1166,12 @@ function load_source_head_data(file, head_file, label_file, label2idx, max_sent_
   return data
 end
 
+-- load pair of sentences for entailment classification
+function load_source_entailment_data(file, dataset_file, label_file, label2idx, max_sent_len)
+  print('TODO: implement load_source_entailment_data()')
+  data = {}
+  return data
+end
 
 function get_labels(label_file, multilabel)
   local label2idx, idx2label = {}, {}
