@@ -230,15 +230,13 @@ function train(train_data, epoch)
     local batch_input, batch_labels, batch_heads = {}, {}, {}
     for j = i,math.min(i+classifier_opt.batch_size-1, #train_data) do
       -- TODO: figure out how to edit heads and source
-      local source = train_data[shuffle[j]][1]      
+      local source = train_data[shuffle[j]][1]
       if opt.gpuid >= 0 then source = source:cuda() end
       local input, labels, heads = {source}
       if classifier_opt.enc_or_dec == 'enc' then
         if classifier_opt.deprel or classifier_opt.semdeprel then
           heads = train_data[shuffle[j]][2]
           table.insert(batch_heads, heads)
-          labels = train_data[shuffle[j]][3]
-        elseif classifier_opt.entailment then
           labels = train_data[shuffle[j]][3]
         else
           labels = train_data[shuffle[j]][2]
@@ -462,7 +460,6 @@ function train(train_data, epoch)
         end
         
         -- take encoder/decoder output as input to classifier
-        -- TODO: combine the test and hypothesis sentences in the entailment case
         local classifier_input_all
         if classifier_opt.enc_or_dec == 'dec' then
           -- always ignore start and end sybmols in dec
@@ -1171,7 +1168,23 @@ function load_source_entailment_data(file, dataset_file, label_file, label2idx, 
   data = {}
   for sents, orig_source, label in seq.zip3(io.lines(file), io.lines(dataset_file), io.lines(label_file)) do
     sent_list = beam.clean_sents(sents)
-    table.insert(data, {sent_list[1], sent_list[2], label2idx[label]})
+    t_sent = sent_list[1]
+    h_sent = sent_list[2]
+    local t_source, h_source
+    if model_opt.use_chars_enc == 0 then
+      t_source, _ = beam.sent2wordidx(t_sent, word2idx_src, model_opt.start_symbol)
+      h_source, _ = beam.sent2wordidx(h_sent, word2idx_src, model_opt.start_symbol)
+    else
+      t_source, _ = beam.sent2charidx(t_sent, char2idx, model_opt.max_word_l, model_opt.start_symbol)
+      h_source, _ = beam.sent2charidx(h_sent, char2idx, model_opt.max_word_l, model_opt.start_symbol)
+    end
+    if t_source:dim() == 0 then
+      print('Warning: empty source vector in test sentence ' .. t_sent)
+    end
+    if h_source:dim() == 0 then
+      print('Warning: empty source vector in hypothesis sentence ' .. h_sent)
+    end
+    table.insert(data, {torch.cat(t_source, h_source), label2idx[label]})
   end
   return data
 end
