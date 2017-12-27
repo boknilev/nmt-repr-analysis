@@ -58,9 +58,9 @@ cmd:option('-cl_test_target_file', '', 'Path to test file with target sentences'
 cmd:option('-cl_train_head_file', '', 'Path to train file with dependency head indices')
 cmd:option('-cl_val_head_file', '', 'Path to validation file with dependency head indices')
 cmd:option('-cl_test_head_file', '', 'Path to test file with dependency head indices')
-cmd:option('-cl_train_dataset_file', '', 'Path to train file with list of original semantic dataset')
-cmd:option('-cl_val_dataset_file', '', 'Path to val file with list of original semantic dataset')
-cmd:option('-cl_test_dataset_file', '', 'Path to test file with list of original semantic dataset')
+cmd:option('-cl_train_orig_dataset_file', '', 'Path to train file with list of original semantic dataset')
+cmd:option('-cl_val_orig_dataset_file', '', 'Path to val file with list of original semantic dataset')
+cmd:option('-cl_test_orig_dataset_file', '', 'Path to test file with list of original semantic dataset')
 cmd:option('-cl_save', '', 'Path to folder where experiment will be saved')
 cmd:option('-cl_save_model', 1, 'Whether to save model on every epoch')
 cmd:option('-cl_pred_file', '', 'Prefix to save prediction files (should be base name, not full path)')
@@ -535,8 +535,8 @@ end
 
 function clean_sents(sent)
   -- assumes the string contains two sentences seperated by |||
-  local s_list = stringx.split(sent, "|||")
-  return clean_sent(s_list[0]), clean_sent(s_list[1])
+  s_list = stringx.split(sent, "|||")
+ return {clean_sent(s_list[1]), clean_sent(s_list[2])}
 end
 
 function clean_sent(sent)
@@ -595,7 +595,7 @@ function init(arg)
   model_opt.brnn = model_opt.brnn or 0
   model_opt.input_feed = model_opt.input_feed or 1
   model_opt.attn = model_opt.attn or 1
-
+  print('source dict ' .. opt.src_dict)
   idx2word_src = idx2key(opt.src_dict)
   word2idx_src = flip_table(idx2word_src)
   idx2word_targ = idx2key(opt.targ_dict)
