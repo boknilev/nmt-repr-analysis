@@ -239,7 +239,7 @@ function train(train_data, epoch)
           table.insert(batch_heads, heads)
           labels = train_data[shuffle[j]][3]
         elseif classifier_opt.entailment then
-          print('TODO: Extract labels from training data for entailment')
+          labels = train_data[shuffle[j]][3]
         else
           labels = train_data[shuffle[j]][2]
         end
@@ -649,7 +649,7 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
         heads = data[i][2]
         labels = data[i][3]
       elseif classifier_opt.entailment then
-        print('TODO: Extract labels from training data for entailment')
+        labels = data[i][3]
       else
         labels = data[i][2]      
       end
@@ -994,17 +994,16 @@ function load_data(classifier_opt, label2idx)
       print('==> words with unknown labels in test data: ' .. unknown_labels)      
     elseif classifier_opt.entailment then
       -- if any of these unknown_labels are 0 then there is an issue
-      print('TODO: Extract data for entailment')
       unknown_labels = 0
-      train_data = load_source_entailment_data(classifier_opt.train_source_file, classifier_opt.train_dataset_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len)
+      train_data = load_source_entailment_data(classifier_opt.train_source_file, classifier_opt.train_orig_dataset_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len)
       print('==> words with unknown labels in train data: ' .. unknown_labels)
       assert(unknown_labels == 0, 'Training data contained an unknown label')
       unknown_labels = 0
-      val_data = load_source_entailment_data(classifier_opt.val_source_file, classifier_opt.val_dataset_file, classifier_opt.val_lbl_file, label2idx)
+      val_data = load_source_entailment_data(classifier_opt.val_source_file, classifier_opt.val_orig_dataset_file, classifier_opt.val_lbl_file, label2idx)
       print('==> words with unknown labels in val data: ' .. unknown_labels)
       assert(unknown_labels == 0, 'Validation data contained an unknown label')
       unknown_labels = 0
-      test_data = load_source_entailment_data(classifier_opt.test_source_file, classifier_opt.test_dataset_file, classifier_opt.test_lbl_file, label2idx)
+      test_data = load_source_entailment_data(classifier_opt.test_source_file, classifier_opt.test_orig_dataset_file, classifier_opt.test_lbl_file, label2idx)
       print('==> words with unknown labels in test data: ' .. unknown_labels)
       assert(unknown_labels == 0, 'Test data contained an unknown label')
     else
@@ -1168,8 +1167,12 @@ end
 
 -- load pair of sentences for entailment classification
 function load_source_entailment_data(file, dataset_file, label_file, label2idx, max_sent_len)
-  print('TODO: implement load_source_entailment_data()')
+  local max_sent_len = max_sent_len or math.huge
   data = {}
+  for sents, orig_source, label in seq.zip3(io.lines(file), io.lines(dataset_file), io.lines(label_file)) do
+    sent_list = beam.clean_sents(sents)
+    table.insert(data, {sent_list[1], sent_list[2], label2idx[label]})
+  end
   return data
 end
 

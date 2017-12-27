@@ -3,14 +3,20 @@ import glob
 
 def main():
   f_train_lbl = open("rte/cl_train_lbl_file", "wb")
-  f_dev_lbl = open("rte/cl_dev_lbl_file", "wb")
+  f_dev_lbl = open("rte/cl_val_lbl_file", "wb")
   f_test_lbl = open("rte/cl_test_lbl_file", "wb")
 
   f_train_source = open("rte/cl_train_source_file", "wb")
-  f_dev_source = open("rte/cl_dev_source_file", "wb")
+  f_dev_source = open("rte/cl_val_source_file", "wb")
   f_test_source = open("rte/cl_test_source_file", "wb")
 
-  out_files = {"train": [f_train_lbl, f_train_source], "dev": [f_dev_lbl, f_dev_source], "test": [f_test_lbl, f_test_source]}
+  f_train_orig_data = open("rte/cl_train_orig_dataset_file", "wb")
+  f_val_orig_data = open("rte/cl_val_orig_dataset_file", "wb")
+  f_test_orig_data = open("rte/cl_test_orig_dataset_file", "wb")
+
+  out_files = {"train": [f_train_lbl, f_train_source, f_train_orig_data], \
+                "dev": [f_dev_lbl, f_dev_source, f_val_orig_data], \
+               "test": [f_test_lbl, f_test_source, f_test_orig_data]}
 
   input_files = glob.glob("./rte/*_data.txt")
   for file in input_files:
@@ -37,6 +43,7 @@ def main():
         #print orig_sent, hyp_sent, data_split, src, label
         out_files[data_split][0].write(str(label) +  "\n")
         out_files[data_split][1].write(orig_sent + "|||" + hyp_sent + "\n")
+        out_files[data_split][2].write(file.split("/")[-1].split("_")[0] + "\n")
  
         orig_sent, hyp_sent, data_split, src, label = None, None, None, None, None
 
