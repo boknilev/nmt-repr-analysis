@@ -238,6 +238,9 @@ function train(train_data, epoch)
           heads = train_data[shuffle[j]][2]
           table.insert(batch_heads, heads)
           labels = train_data[shuffle[j]][3]
+        elseif classifier_opt.entailment then
+          labels = train_data[shuffle[j]][3]
+          -- TODO: figure out what to do with the sentences
         else
           labels = train_data[shuffle[j]][2]
         end
@@ -644,8 +647,6 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
     if classifier_opt.enc_or_dec == 'enc' then
       if classifier_opt.deprel or classifier_opt.semdeprel then
         heads = data[i][2]
-        labels = data[i][3]
-      elseif classifier_opt.entailment then
         labels = data[i][3]
       else
         labels = data[i][2]      
@@ -1184,7 +1185,9 @@ function load_source_entailment_data(file, dataset_file, label_file, label2idx, 
     if h_source:dim() == 0 then
       print('Warning: empty source vector in hypothesis sentence ' .. h_sent)
     end
-    table.insert(data, {torch.cat(t_source, h_source), label2idx[label]})
+    if #stringx.split(h_sent, " ") + #stringx.split(t_sent, " ") <= max_sent_len then
+      table.insert(data, {t_source, h_source, label2idx[label]})
+    end
   end
   return data
 end
