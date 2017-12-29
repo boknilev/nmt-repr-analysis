@@ -36,7 +36,7 @@ function main()
   
   -- number of module for word representation
   module_num = 2*classifier_opt.enc_layer - classifier_opt.use_cell
-    
+
   -- first pass: get labels
   print('==> first pass: getting labels')
   label2idx, idx2label = get_labels(classifier_opt.train_lbl_file, classifier_opt.semdeprel)
@@ -184,7 +184,11 @@ function main()
   -- do epochs
   local epoch, best_epoch, best_loss = 1, 1, math.huge
   while epoch <= classifier_opt.epochs and epoch - best_epoch <= classifier_opt.patience do 
-    train(train_data, epoch)
+    if classifier_opt.entailment then
+      train_entailment(train_data, epoch)
+    else
+      train(train_data, epoch)
+    end
     val_loss = eval(val_data, epoch, val_logger, 'val')
     if val_loss < best_loss then
       best_epoch = epoch
@@ -252,11 +256,11 @@ function train(train_data, epoch)
         labels = train_data[shuffle[j]][3]
       else
         error('unknown value for classifier_opt.enc_or_dec: ' .. classifier_opt.enc_or_dec)
-      end          
+      end
       table.insert(batch_input, input)
       table.insert(batch_labels, labels)
     end
-    
+
     -- closure
     local eval_loss_grad = function(x) 
       -- get new params
@@ -482,7 +486,7 @@ function train(train_data, epoch)
             classifier_input_all = context[{{}, {2,end_idx}}]
           end
         end
-        
+
         if classifier_opt.verbose then 
           print('classifier_input_all:'); print(classifier_input_all);
           print('batch_labels[j]:'); print(batch_labels[j])
@@ -620,6 +624,182 @@ function train(train_data, epoch)
       
 end
 
+function train_entailment(train_data, epoch)
+  local time = sys.clock()
+  classifier:training()
+  -- set MT model to evaluate mode
+  encoder:evaluate(); decoder:evaluate();
+  if model_opt.brnn == 1 then encoder_brnn:evaluate() end
+
+  local shuffle = torch.randperm(#train_data)
+
+  print('\n==> doing epoch on training data:')
+  print('\n==> epoch # ' .. epoch .. ' [batch size = ' .. classifier_opt.batch_size .. ']')
+
+  local total_loss, num_total_words = 0, 0
+  for i = 1,#train_data, classifier_opt.batch_size do
+    collectgarbage()
+    xlua.progress(i, #train_data)
+
+    -- prepare mini-batch
+    local batch_input, batch_labels = {}, {}
+    for j = i,math.min(i+classifier_opt.batch_size-1, #train_data) do
+      local t_source = train_data[shuffle[j]][1]
+      local h_source = train_data[shuffle[j]][2]
+      if opt.gpuid >= 0 then
+        t_source = t_source:cuda()
+        h_source = h_source:cuda()
+      end
+      label = train_data[shuffle[j]][3]
+      table.insert(batch_input, {t_source, h_source})
+      table.insert(batch_labels, labels)
+    end
+
+    -- closure
+    local eval_loss_grad = function(x)
+      --  get new params
+      if x ~= classifier_params then classifier_params:copy(x) end
+
+      -- reset gradients
+      classifier_grads:zero()
+
+      local loss, num_words = 0, 0
+      for j = 1,#batch_input do
+        local t_source, h_source = batch_input[j][1], batch_input[j][2]
+        if classifier_opt.verbose then
+          print('j: ' .. j)
+          print('t_source:'); print(t_source);
+          print('t_sent: ' .. indices_to_string(t_source, idx2word_src))
+          print('h_source:'); print(h_source);
+          print('h_sent: ' .. indices_to_string(h_source, idx2word_src))
+        end
+        local t_source_l, h_source_l = math.min(t_source:size(1), opt.max_sent_l), math.min(h_source:size(1), opt.max_sent_l)
+        if classifier_opt.verbose then
+          print('t_source_l: ' .. t_source_l)
+          print('h_source_l: ' .. h_source_l)
+          print('opt.max_sent_l: ' .. opt.max_sent_l)
+        end
+        local t_source_input, h_source_input
+        if model_opt.use_chars_enc == 1 then
+          t_source_input = t_source:view(t_source_l, 1, t_source:size(2)):contiguous()
+          h_source_input = h_source:view(h_source_l, 1, h_source:size(2)):contiguous()
+        else
+          t_source_input = t_source:view(t_source_l, 1)
+          h_source_input = h_source:view(h_source_l, 1)
+        end
+        if classifier_opt.verbose then
+          print('t_source_input:'); print(t_source_input);
+          print('h_source_input:'); print(h_source_input);
+        end
+
+        local rnn_state_enc = {}
+        for i = 1, #init_fwd_enc do
+          table.insert(rnn_state_enc, init_fwd_enc[i]:zero())
+        end
+        local t_context = context_proto[{{}, {1,t_source_l}}]:clone() -- 1 x source_l x rnn_size
+        local h_context = context_proto[{{}, {1,h_source_l}}]:clone() -- 1 x source_l x rnn_size
+        -- special case when using word vectors
+        if classifier_opt.enc_layer == 0 then
+          if model_opt.use_chars_enc == 0 then
+            t_context = context_proto_word_vecs[{ {}, {1,t_source_l}, {} }]:clone()
+            h_context = context_proto_word_vecs[{ {}, {1,h_source_l}, {} }]:clone()
+          else
+            t_context = context_proto_char_cnn[{ {}, {1,t_source_l}, {} }]:clone()
+            h_context = context_proto_char_cnn[{ {}, {1,h_source_l}, {} }]:clone()
+          end
+        end
+
+        -- forward encoder
+        if classifier_opt.verbose then print('forward fwd encoder') end
+        -- run teext sentence through the encoder
+        local final_t_enc_out, final_h_enc_out
+        for t = 1, t_source_l do
+          print('running t through encoder for text sent: ' .. t)
+          local t_enc_out
+          if classifier_opt.enc_layer > 0 then
+            local t_encoder_input = {t_source_input[t], table.unpack(rnn_state_enc)}
+            print('#t_encoder_input: ' .. #t_encoder_input)
+            --for _ = 1, #t_encoder_input do
+            --  print(_); print(t_encoder_input[_])
+            --end
+            t_enc_out = encoder:forward(t_encoder_input)
+            rnn_state_enc = t_enc_out
+            if classifier_opt.verbose then
+              print('encoded t: ' .. t)
+              print('t_encoder_input:'); print(t_encoder_input)
+              print('t_enc_out:'); print(t_enc_out);
+            end
+          end
+          final_t_enc_out = t_enc_out
+        end
+        -- run hypothesis sentence through the encoder
+        for t = 1, h_source_l do
+          local h_enc_out
+          if classifier_opt.enc_layer > 0 then
+            local h_encoder_input = {h_source_input[t], table.unpack(rnn_state_enc)}
+            h_enc_out = encoder:forward(h_encoder_input)
+            rnn_state_enc = h_enc_out
+            if classifier_opt.verbose then
+              print('t: ' .. t)
+              print('encoder_input:'); print(h_encoder_input)
+              print('enc_out:'); print(h_enc_out);
+            end
+          end
+          final_h_enc_out = h_enc_out
+        end
+        -- combine encoded t and h sentences for the classifier
+        classifier_input = torch.cat(final_t_enc_out, final_h_enc_out)
+        print('#classifier_input: ' .. #classifier_input)
+        -- take encoder output as input to classifier
+        local classifier_out = classifier:forward(classifier_input)
+        loss = loss + criterion:forward(classifier_out, batch_labels[j][t])
+        num_words = num_words + 1
+        local output_grad = criterion:backward(classifier_out, batch_labels[j][t])
+        classifier:backward(classifier_input, output_grad)
+
+        if classifier_opt.verbose then
+          print('t: ' .. t)
+          print('classifier_input:'); print(classifier_input);
+          print('classifier_out:'); print(classifier_out);
+          print('batch_labels[j][t]: ' .. batch_labels[j][t])
+          print('loss:'); print(loss);
+          print('output_grad:'); print(output_grad);
+          end
+
+        -- update confusion matrix
+        confusion:add(classifier_out, batch_labels[j][t])
+      end
+
+      classifier_grads:div(num_words)
+      -- keep loss over entire training data
+      total_loss = total_loss + loss
+      num_total_words = num_total_words + num_words
+      -- loss for current batch
+      loss = loss/num_words
+
+      return loss, classifier_grads
+    end
+
+    optim_method(eval_loss_grad, classifier_params, optim_stat)
+  end
+
+  time = (sys.clock() - time) / #train_data
+  print('==> time to learn 1 sample = ' .. (time*1000) .. 'ms')
+  total_loss = total_loss/num_total_words
+  print('==> loss: ' .. total_loss)
+  print(confusion)
+
+  -- update logger/plot
+  train_logger:add{['% mean class accuracy (train set)'] = confusion.totalValid * 100}
+  if classifier_opt.plot then
+    train_logger:style{['% mean class accuracy (train set)'] = '-'}
+    train_logger:plot()
+  end
+
+  -- for next epoch
+  confusion:zero()
+
+end
 
 function eval(data, epoch, logger, test_or_val, pred_filename)
   test_or_val = test_or_val or 'test'
@@ -829,7 +1009,7 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
         classifier_input_all = context[{{}, {2,end_idx}}]
       end
     end
-    
+
     -- write out representations if needed
     if classifier_opt.write_test_word_repr and word_repr_file then
       for t = 1, classifier_input_all:size(2) do
@@ -1185,7 +1365,8 @@ function load_source_entailment_data(file, dataset_file, label_file, label2idx, 
     if h_source:dim() == 0 then
       print('Warning: empty source vector in hypothesis sentence ' .. h_sent)
     end
-    if #stringx.split(h_sent, " ") + #stringx.split(t_sent, " ") <= max_sent_len then
+    h_l, t_l = #stringx.split(h_sent, " "), #stringx.split(t_sent, " ")
+    if h_l <= max_sent_len and h_l >= 1 and t_l <= max_sent_len and t_l >= 1 then
       table.insert(data, {t_source, h_source, label2idx[label]})
     end
   end
