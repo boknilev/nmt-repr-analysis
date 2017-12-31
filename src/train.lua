@@ -6,6 +6,7 @@ require 'xlua'
 require 'optim'
 seq = require 'pl.seq'
 stringx = require 'pl.stringx'
+dbg = require 'debugger'
 
 function main()
   print(arg)
@@ -187,7 +188,12 @@ function main()
     else
       train(train_data, epoch)
     end
-    val_loss = eval(val_data, epoch, val_logger, 'val')
+    local val_loss
+    if classifier_opt.entailment then
+      val_loss = eval_entailment(val_data, epoch, val_logger, 'val')
+    else
+      val_loss = eval(val_data, epoch, val_logger, 'val')
+    end
     if val_loss < best_loss then
       best_epoch = epoch
       best_loss = val_loss
@@ -199,7 +205,11 @@ function main()
         torch.save(filename, classifier)        
       end
     end
-    eval(test_data, epoch, test_logger, 'test', classifier_opt.pred_file)
+    if classifier_opt.entailment then
+      eval_entailment(test_data, epoch, test_logger, 'test', classifier_opt.pred_file)
+    else
+      eval(test_data, epoch, test_logger, 'test', classifier_opt.pred_file)
+    end
     print('finished epoch ' .. epoch .. ', with val loss: ' .. val_loss)
     print('best epoch: ' .. best_epoch .. ', with val loss: ' .. best_loss)
     epoch = epoch + 1    
@@ -712,18 +722,12 @@ function train_entailment(train_data, epoch)
         -- run teext sentence through the encoder
         local final_t_enc_out, final_h_enc_out
         for t = 1, t_source_l do
-          print('running t through encoder for text sent: ' .. t)
           local t_enc_out
           if classifier_opt.enc_layer > 0 then
             local t_encoder_input = {t_source_input[t], table.unpack(rnn_state_enc)}
-            print('#t_encoder_input: ' .. #t_encoder_input)
-            --for _ = 1, #t_encoder_input do
-            --  print(_); print(t_encoder_input[_])
-            --end
             t_enc_out = encoder:forward(t_encoder_input)
             rnn_state_enc = t_enc_out
             if classifier_opt.verbose then
-              print('encoded t: ' .. t)
               print('t_encoder_input:'); print(t_encoder_input)
               print('t_enc_out:'); print(t_enc_out);
             end
@@ -734,6 +738,11 @@ function train_entailment(train_data, epoch)
           end
         end
         -- run hypothesis sentence through the encoder
+        -- first refresh the rnn_state_encoder
+        local rnn_state_enc = {}
+        for i = 1, #init_fwd_enc do
+          table.insert(rnn_state_enc, init_fwd_enc[i]:zero())
+        end
         for t = 1, h_source_l do
           local h_enc_out
           if classifier_opt.enc_layer > 0 then
@@ -741,7 +750,6 @@ function train_entailment(train_data, epoch)
             h_enc_out = encoder:forward(h_encoder_input)
             rnn_state_enc = h_enc_out
             if classifier_opt.verbose then
-              print('t: ' .. t)
               print('encoder_input:'); print(h_encoder_input)
               print('enc_out:'); print(h_enc_out);
             end
@@ -1156,9 +1164,142 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
   if pred_file then pred_file:close() end
   if word_repr_file then word_repr_file:close() end
   return loss
-  
+
 end
 
+function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
+  test_or_val = test_or_val or 'test'
+  local pred_file
+  if pred_filename then
+    pred_file = torch.DiskFile(pred_filename .. '.epoch' .. epoch, 'w')
+  end
+  local word_repr_file
+  if pred_file and classifier_opt.write_test_word_repr and classifier_opt.test_word_repr_file then
+    word_repr_file = torch.DiskFile(classifier_opt.test_word_repr_file, 'w')
+  end
+
+  local time = sys.clock()
+  classifier:evaluate()
+  encoder:evaluate(); decoder:evaluate();
+  if model_opt.brnn == 1 then encoder_brnn:evaluate() end
+
+  print('\n==> evaluating on ' .. test_or_val .. ' data')
+  print('==> epoch: ' .. epoch)
+  local loss, num_words, word_counter = 0, 0, 0
+  for i=1,#data do
+    xlua.progress(i, #data)
+    local t_source = data[i][1]
+    local h_source = data[i][2]
+    local label = data[i][3]
+    if opt.gpuid >= 0 then t_source = t_source:cuda(); h_source = h_source:cuda(); end
+
+    --TODO: need to figure out how to deal with the situation where opt.max_sent_l < _source:size(1)
+    -- Probably best move is to just do the equivalent to continue in python
+    -- https://stackoverflow.com/questions/3524970/why-does-lua-have-no-continue-statement
+    local t_source_l = math.min(t_source:size(1), opt.max_sent_l)
+    local h_source_l = math.min(h_source:size(1), opt.max_sent_l)
+    local t_source_input, h_source_input
+    if model_opt.use_chars_enc == 1 then
+      t_source_input = t_source:view(t_source_l, 1, t_source:size(2)):contiguous()
+      h_source_input = h_source:view(h_source_l, 1, h_source:size(2)):contiguous()
+    else
+      t_source_input = t_source:view(t_source_l, 1)
+      h_source_input = h_source:view(h_source_l, 1)
+    end
+
+    local t_context = context_proto[{{}, {1,t_source_l}}]:clone() -- 1 x source_l x rnn_size
+    local h_context = context_proto[{{}, {1,h_source_l}}]:clone() -- 1 x source_l x rnn_size
+    -- special case when using word vectors
+    if classifier_opt.enc_layer == 0 then
+      if model_opt.use_chars_enc == 0 then
+        t_context = context_proto_word_vecs[{ {}, {1,t_source_l}, {} }]:clone()
+        h_context = context_proto_word_vecs[{ {}, {1,h_source_l}, {} }]:clone()
+      else
+        t_context = context_proto_char_cnn[{ {}, {1,t_source_l}, {} }]:clone()
+        h_context = context_proto_char_cnn[{ {}, {1,h_source_l}, {} }]:clone()
+      end
+    end
+
+    --forward encoder for t sentence
+    local rnn_state_enc = {}
+    for i = 1, #init_fwd_enc do
+      table.insert(rnn_state_enc, init_fwd_enc[i]:zero())
+    end
+    local pred_labels = {}
+    for t = 1, t_source_l do
+      -- run through encoder if using representations above word vectors or if need it for decoder
+      local t_enc_out
+      if classifier_opt.enc_layer > 0 then
+        local t_encoder_input = {t_source_input[t], table.unpack(rnn_state_enc)}
+        t_enc_out = encoder:forward(t_encoder_input)
+        rnn_state_enc = t_enc_out
+      end
+      if classifier_opt.enc_layer > 0 then
+        t_context[{{},t}]:copy(t_enc_out[module_num])
+      end
+    end
+    -- forward encoder for h sentence
+    local rnn_state_enc = {}
+    for i = 1, #init_fwd_enc do
+      table.insert(rnn_state_enc, init_fwd_enc[i]:zero())
+    end
+    for t = 1, h_source_l do
+      -- run through encoder if using representations above word vectors or if need it for decoder
+      local h_enc_out
+      if classifier_opt.enc_layer > 0 then
+        local h_encoder_input = {h_source_input[t], table.unpack(rnn_state_enc)}
+        h_enc_out = encoder:forward(h_encoder_input)
+        rnn_state_enc = h_enc_out
+      end
+      if classifier_opt.enc_layer > 0 then
+        h_context[{{},t}]:copy(h_enc_out[module_num])
+      end
+    end
+
+    --TODO if model_opt.brnn == 1 then end
+
+    -- combine encoded t and h sentences for the classifier
+    classifier_input = torch.cat(t_context[{1,t_source_l}], h_context[{1,h_source_l}])
+    local classifier_out = classifier:forward(classifier_input)
+    -- get predicted labels to write to file
+    if pred_file then
+      local _, pred_idx =  classifier_out:max(1)
+      pred_idx = pred_idx:long()[1]
+      local pred_label = idx2label[pred_idx]
+      table.insert(pred_labels, pred_label)
+    end
+
+    loss = loss + criterion:forward(classifier_out, label)
+    num_words = num_words + 1
+
+    confusion:add(classifier_out, label)
+
+    if pred_file then
+      pred_file:writeString(stringx.join(' ', pred_labels) .. '\n')
+    end
+  end
+  loss = loss/num_words
+
+  time = (sys.clock() - time) / #data
+  print('==> time to evaluate 1 sample = ' .. (time*1000) .. 'ms')
+  print('==> loss: ' .. loss)
+
+  print(confusion)
+
+  -- update log/plot
+  logger:add{['% mean class accuracy (' .. test_or_val .. ' set)'] = confusion.totalValid * 100}
+  if classifier_opt.plot then
+    logger:style{['% mean class accuracy (' .. test_or_val .. ' set)'] = '-'}
+    logger:plot()
+  end
+
+  -- next epoch
+  confusion:zero()
+
+  if pred_file then pred_file:close() end
+  if word_repr_file then word_repr_file:close() end
+  return loss
+end
 
 function load_data(classifier_opt, label2idx)
   local train_data, val_data, test_data
