@@ -1,0 +1,18 @@
+CUDA_LAUNCH_BLOCKING=1  th train.lua -model ../models/en-ar-model_epoch13.00_18.31.t7 -gpuid 1 \
+ -src_dict ../data/en-ar-2m-75k.src.dict \
+ -targ_dict ../data/en-ar-2m-75k.targ.dict \
+ -cl_train_lbl_file ../data/rte/cl_train_lbl_file \
+ -cl_val_lbl_file ../data/rte/cl_val_lbl_file \
+ -cl_test_lbl_file ../data/rte/cl_val_lbl_file \
+ -cl_train_source_file ../data/rte/cl_train_source_file \
+ -cl_val_source_file ../data/rte/cl_val_source_file \
+ -cl_test_source_file ../data/rte/cl_val_source_file \
+ -cl_save output \
+ -cl_pred_file pred_file \
+ -cl_entailment \
+ -cl_train_orig_dataset_file ../data/rte/cl_train_orig_dataset_file \
+ -cl_val_orig_dataset_file ../data/rte/cl_val_orig_dataset_file \
+ -cl_test_orig_dataset_file ../data/rte/cl_val_orig_dataset_file \
+ -cl_verbose \
+ -max_sent_l 9 \
+ -cl_max_sent_len 9 \
