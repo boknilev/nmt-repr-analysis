@@ -7,7 +7,6 @@ require 'optim'
 seq = require 'pl.seq'
 stringx = require 'pl.stringx'
 
-
 function main()
   print(arg)
   beam.init(arg)
@@ -36,7 +35,6 @@ function main()
   
   -- number of module for word representation
   module_num = 2*classifier_opt.enc_layer - classifier_opt.use_cell
-
   -- first pass: get labels
   print('==> first pass: getting labels')
   label2idx, idx2label = get_labels(classifier_opt.train_lbl_file, classifier_opt.semdeprel)
@@ -652,7 +650,7 @@ function train_entailment(train_data, epoch)
       end
       label = train_data[shuffle[j]][3]
       table.insert(batch_input, {t_source, h_source})
-      table.insert(batch_labels, labels)
+      table.insert(batch_labels, label)
     end
 
     -- closure
@@ -731,6 +729,9 @@ function train_entailment(train_data, epoch)
             end
           end
           final_t_enc_out = t_enc_out
+          if classifier_opt.enc_layer > 0 then
+            t_context[{{},t}]:copy(t_enc_out[module_num])
+          end
         end
         -- run hypothesis sentence through the encoder
         for t = 1, h_source_l do
@@ -746,28 +747,30 @@ function train_entailment(train_data, epoch)
             end
           end
           final_h_enc_out = h_enc_out
+          if classifier_opt.enc_layer > 0 then
+            h_context[{{},t}]:copy(h_enc_out[module_num])
+          end
         end
         -- combine encoded t and h sentences for the classifier
-        classifier_input = torch.cat(final_t_enc_out, final_h_enc_out)
-        print('#classifier_input: ' .. #classifier_input)
+        classifier_input = torch.cat(t_context[{1,t_source_l}], h_context[{1,h_source_l}])
         -- take encoder output as input to classifier
         local classifier_out = classifier:forward(classifier_input)
-        loss = loss + criterion:forward(classifier_out, batch_labels[j][t])
+        loss = loss + criterion:forward(classifier_out, batch_labels[j])
         num_words = num_words + 1
-        local output_grad = criterion:backward(classifier_out, batch_labels[j][t])
+        local output_grad = criterion:backward(classifier_out, batch_labels[j])
         classifier:backward(classifier_input, output_grad)
 
         if classifier_opt.verbose then
-          print('t: ' .. t)
+          print('j: ' .. j)
           print('classifier_input:'); print(classifier_input);
           print('classifier_out:'); print(classifier_out);
-          print('batch_labels[j][t]: ' .. batch_labels[j][t])
+          print('batch_labels[j]: ' .. batch_labels[j])
           print('loss:'); print(loss);
           print('output_grad:'); print(output_grad);
           end
 
         -- update confusion matrix
-        confusion:add(classifier_out, batch_labels[j][t])
+        confusion:add(classifier_out, batch_labels[j])
       end
 
       classifier_grads:div(num_words)
