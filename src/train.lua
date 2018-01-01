@@ -742,6 +742,9 @@ function train_entailment(train_data, epoch)
           end
         end
         local t_right_forward = t_context[{{}, t_source_l}]
+        -- zero out t_context so that we can just take the left most
+        -- hidden state from the backward encoder
+        t_context:zero()
         -- run premise sentence through brnn
         if model_opt.brnn == 1 then
           for i = 1, #rnn_state_enc do
@@ -787,6 +790,9 @@ function train_entailment(train_data, epoch)
           end
         end
         local h_right_forward = h_context[{{}, h_source_l}]
+        -- zero out h_context so that we can just take the left most
+        -- hidden state from the backward encoder
+        h_context:zero()
 
         -- run hypothesis sentence through brnn
         if model_opt.brnn == 1 then
@@ -1298,7 +1304,9 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
       end
     end
     local t_right_forward = t_context[{{}, t_source_l}]
-
+    -- zero out t_context so that we can just take the left most
+    -- hidden state from the backward encoder
+    t_context:zero()
     -- run premise sentence through brnn
     if model_opt.brnn == 1 then
       for i = 1, #rnn_state_enc do
@@ -1339,6 +1347,9 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
       end
     end
     local h_right_forward = h_context[{{}, h_source_l}]
+    -- zero out h_context so that we can just take the left most
+    -- hidden state from the backward encoder
+    h_context:zero()
 
     -- run premise sentence through brnn
     if model_opt.brnn == 1 then
