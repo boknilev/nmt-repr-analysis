@@ -107,6 +107,9 @@ function main()
     -- Rocktaschel et. al.(ICLR 2016) and Bowman et. al. (EMNLP 2015) concat sentence representations too
     print('==> concatenating test and hypothesis sentence representations for predicting entailment')
     classifier_input_size = classifier_input_size + classifier_input_size
+    if model_opt.brnn then
+      classifier_input_size = classifier_input_size + classifier_input_size
+    end
   end
   
   
@@ -738,7 +741,7 @@ function train_entailment(train_data, epoch)
             t_context[{{},t}]:copy(t_enc_out[module_num])
           end
         end
-
+        local t_right_forward = t_context[{{}, t_source_l}]
         -- run premise sentence through brnn
         if model_opt.brnn == 1 then
           for i = 1, #rnn_state_enc do
@@ -783,6 +786,7 @@ function train_entailment(train_data, epoch)
             h_context[{{},t}]:copy(h_enc_out[module_num])
           end
         end
+        local h_right_forward = h_context[{{}, h_source_l}]
 
         -- run hypothesis sentence through brnn
         if model_opt.brnn == 1 then
@@ -810,9 +814,11 @@ function train_entailment(train_data, epoch)
         -- combine encoded t and h sentences for the classifier
         local classifier_input
         if model_opt.brnn == 1 then
-          classifier_input = torch.cat(t_context[{1,1}], h_context[{1,1}])
+          classifier_input = torch.cat(t_right_forward, t_context[{{},1}])
+          classifier_input = torch.cat(classifier_input, h_right_forward)
+          classifier_input = torch.cat(classifier_input, h_context[{{},1}])
         else
-          classifier_input = torch.cat(t_context[{1,t_source_l}], h_context[{1,h_source_l}])
+          classifier_input = torch.cat(t_context[{{},t_source_l}], h_context[{{},h_source_l}])
         end
         -- take encoder output as input to classifier
         local classifier_out = classifier:forward(classifier_input)
@@ -831,7 +837,7 @@ function train_entailment(train_data, epoch)
           end
 
         -- update confusion matrix
-        confusion:add(classifier_out, batch_labels[j])
+        confusion:add(classifier_out[{1, {}}], batch_labels[j])
       end
 
       classifier_grads:div(num_words)
@@ -1291,6 +1297,7 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
         t_context[{{},t}]:copy(t_enc_out[module_num])
       end
     end
+    local t_right_forward = t_context[{{}, t_source_l}]
 
     -- run premise sentence through brnn
     if model_opt.brnn == 1 then
@@ -1331,6 +1338,7 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
         h_context[{{},t}]:copy(h_enc_out[module_num])
       end
     end
+    local h_right_forward = h_context[{{}, h_source_l}]
 
     -- run premise sentence through brnn
     if model_opt.brnn == 1 then
@@ -1357,9 +1365,11 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
     -- combine encoded t and h sentences for the classifier
     local classifier_input
     if model_opt.brnn == 1 then
-      classifier_input = torch.cat(t_context[{1,1}], h_context[{1,1}])
+      classifier_input = torch.cat(t_right_forward, t_context[{{},1}])
+      classifier_input = torch.cat(classifier_input, h_right_forward)
+      classifier_input = torch.cat(classifier_input, h_context[{{},1}])
     else
-      classifier_input = torch.cat(t_context[{1,t_source_l}], h_context[{1,h_source_l}])
+      classifier_input = torch.cat(t_context[{{},t_source_l}], h_context[{{},h_source_l}])
     end
     local classifier_out = classifier:forward(classifier_input)
     -- get predicted labels to write to file
@@ -1373,7 +1383,7 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
     loss = loss + criterion:forward(classifier_out, label)
     num_words = num_words + 1
 
-    confusion:add(classifier_out, label)
+    confusion:add(classifier_out[{1, {}}], label)
 
     if pred_file then
       pred_file:writeString(stringx.join(' ', pred_labels) .. '\n')
