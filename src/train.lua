@@ -54,7 +54,8 @@ function main()
   -- second pass: prepare data as vectors
   print('==> second pass: loading data')
   local train_data, val_data, test_data = load_data(classifier_opt, label2idx)
-    
+
+  print('model_opt.brnn: ' .. model_opt.brnn)
   -- use trained encoder/decoder from MT model
   encoder, decoder = model[1], model[2]
   if model_opt.brnn == 1 then
@@ -737,6 +738,29 @@ function train_entailment(train_data, epoch)
             t_context[{{},t}]:copy(t_enc_out[module_num])
           end
         end
+
+        -- run premise sentence through brnn
+        if model_opt.brnn == 1 then
+          for i = 1, #rnn_state_enc do
+            rnn_state_enc[i]:zero()
+          end
+          -- forward bwd encoder
+          if classifier_opt.verbose then print('forward bwd encoder') end
+          for t = t_source_l, 1, -1 do
+            if classifier_opt.enc_layer > 0 then
+              local t_encoder_input = {t_source_input[t], table.unpack(rnn_state_enc)}
+              local t_enc_out = encoder_brnn:forward(t_encoder_input)
+              rnn_state_enc = t_enc_out
+              t_context[{{},t}]:add(t_enc_out[module_num])
+              if classifier_opt.verbose then
+                print('t: ' .. t)
+                print('t_encoder_input:'); print(t_encoder_input);
+                print('t_enc_out:'); print(t_enc_out);
+              end
+            end
+          end
+        end
+
         -- run hypothesis sentence through the encoder
         -- first refresh the rnn_state_encoder
         local rnn_state_enc = {}
@@ -759,8 +783,37 @@ function train_entailment(train_data, epoch)
             h_context[{{},t}]:copy(h_enc_out[module_num])
           end
         end
+
+        -- run hypothesis sentence through brnn
+        if model_opt.brnn == 1 then
+          for i = 1, #rnn_state_enc do
+            rnn_state_enc[i]:zero()
+          end
+          -- forward bwd encoder
+          if classifier_opt.verbose then print('forward bwd encoder') end
+          for t = h_source_l, 1, -1 do
+            if classifier_opt.enc_layer > 0 then
+              local h_encoder_input = {h_source_input[t], table.unpack(rnn_state_enc)}
+              local h_enc_out = encoder_brnn:forward(h_encoder_input)
+              rnn_state_enc = h_enc_out
+              h_context[{{},t}]:add(h_enc_out[module_num])
+              if classifier_opt.verbose then
+                print('t: ' .. t)
+                print('h_encoder_input:'); print(h_encoder_input);
+                print('h_enc_out:'); print(h_enc_out);
+              end
+            end
+          end
+        end
+
+
         -- combine encoded t and h sentences for the classifier
-        classifier_input = torch.cat(t_context[{1,t_source_l}], h_context[{1,h_source_l}])
+        local classifier_input
+        if model_opt.brnn == 1 then
+          classifier_input = torch.cat(t_context[{1,1}], h_context[{1,1}])
+        else
+          classifier_input = torch.cat(t_context[{1,t_source_l}], h_context[{1,h_source_l}])
+        end
         -- take encoder output as input to classifier
         local classifier_out = classifier:forward(classifier_input)
         loss = loss + criterion:forward(classifier_out, batch_labels[j])
@@ -1238,6 +1291,29 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
         t_context[{{},t}]:copy(t_enc_out[module_num])
       end
     end
+
+    -- run premise sentence through brnn
+    if model_opt.brnn == 1 then
+      for i = 1, #rnn_state_enc do
+        rnn_state_enc[i]:zero()
+      end
+      -- forward bwd encoder
+      if classifier_opt.verbose then print('forward bwd encoder') end
+      for t = t_source_l, 1, -1 do
+        if classifier_opt.enc_layer > 0 then
+          local t_encoder_input = {t_source_input[t], table.unpack(rnn_state_enc)}
+          local t_enc_out = encoder_brnn:forward(t_encoder_input)
+          rnn_state_enc = t_enc_out
+          t_context[{{},t}]:add(t_enc_out[module_num])
+          if classifier_opt.verbose then
+            print('t: ' .. t)
+            print('t_encoder_input:'); print(t_encoder_input);
+            print('t_enc_out:'); print(t_enc_out);
+          end
+        end
+      end
+    end
+
     -- forward encoder for h sentence
     local rnn_state_enc = {}
     for i = 1, #init_fwd_enc do
@@ -1256,10 +1332,35 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
       end
     end
 
-    --TODO if model_opt.brnn == 1 then end
+    -- run premise sentence through brnn
+    if model_opt.brnn == 1 then
+      for i = 1, #rnn_state_enc do
+        rnn_state_enc[i]:zero()
+      end
+      -- forward bwd encoder
+      if classifier_opt.verbose then print('forward bwd encoder') end
+      for t = h_source_l, 1, -1 do
+        if classifier_opt.enc_layer > 0 then
+          local h_encoder_input = {h_source_input[t], table.unpack(rnn_state_enc)}
+          local h_enc_out = encoder_brnn:forward(h_encoder_input)
+          rnn_state_enc = h_enc_out
+          h_context[{{},t}]:add(h_enc_out[module_num])
+          if classifier_opt.verbose then
+            print('t: ' .. t)
+            print('h_encoder_input:'); print(h_encoder_input);
+            print('h_enc_out:'); print(h_enc_out);
+          end
+        end
+      end
+    end
 
     -- combine encoded t and h sentences for the classifier
-    classifier_input = torch.cat(t_context[{1,t_source_l}], h_context[{1,h_source_l}])
+    local classifier_input
+    if model_opt.brnn == 1 then
+      classifier_input = torch.cat(t_context[{1,1}], h_context[{1,1}])
+    else
+      classifier_input = torch.cat(t_context[{1,t_source_l}], h_context[{1,h_source_l}])
+    end
     local classifier_out = classifier:forward(classifier_input)
     -- get predicted labels to write to file
     if pred_file then
