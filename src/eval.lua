@@ -6,7 +6,6 @@ require 'xlua'
 require 'optim'
 seq = require 'pl.seq'
 stringx = require 'pl.stringx'
-dbg = require 'debugger'
 
 function main()
   print(arg)
