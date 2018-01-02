@@ -1667,7 +1667,7 @@ function seq.zip2(iter1, iter2)
   iter1 = seq.iter(iter1)
   iter2 = seq.iter(iter2)
   return function()
-    return iter1(),iter2(
+    return iter1(),iter2()
   end
 end
 
