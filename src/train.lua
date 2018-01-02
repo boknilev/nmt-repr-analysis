@@ -1440,15 +1440,15 @@ function load_data(classifier_opt, label2idx)
     elseif classifier_opt.entailment then
       -- if any of these unknown_labels are 0 then there is an issue
       unknown_labels = 0
-      train_data = load_source_entailment_data(classifier_opt.train_source_file, classifier_opt.train_orig_dataset_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len)
+      train_data = load_source_entailment_data(classifier_opt.train_source_file, classifier_opt.train_lbl_file, label2idx, classifier_opt.max_sent_len)
       print('==> words with unknown labels in train data: ' .. unknown_labels)
       assert(unknown_labels == 0, 'Training data contained an unknown label')
       unknown_labels = 0
-      val_data = load_source_entailment_data(classifier_opt.val_source_file, classifier_opt.val_orig_dataset_file, classifier_opt.val_lbl_file, label2idx)
+      val_data = load_source_entailment_data(classifier_opt.val_source_file, classifier_opt.val_lbl_file, label2idx)
       print('==> words with unknown labels in val data: ' .. unknown_labels)
       assert(unknown_labels == 0, 'Validation data contained an unknown label')
       unknown_labels = 0
-      test_data = load_source_entailment_data(classifier_opt.test_source_file, classifier_opt.test_orig_dataset_file, classifier_opt.test_lbl_file, label2idx)
+      test_data = load_source_entailment_data(classifier_opt.test_source_file, classifier_opt.test_lbl_file, label2idx)
       print('==> words with unknown labels in test data: ' .. unknown_labels)
       assert(unknown_labels == 0, 'Test data contained an unknown label')
     else
@@ -1611,10 +1611,10 @@ function load_source_head_data(file, head_file, label_file, label2idx, max_sent_
 end
 
 -- load pair of sentences for entailment classification
-function load_source_entailment_data(file, dataset_file, label_file, label2idx, max_sent_len)
+function load_source_entailment_data(file, label_file, label2idx, max_sent_len)
   local max_sent_len = max_sent_len or math.huge
   data = {}
-  for sents, orig_source, label in seq.zip3(io.lines(file), io.lines(dataset_file), io.lines(label_file)) do
+  for sents, label in seq.zip2(io.lines(file), io.lines(label_file)) do
     sent_list = beam.clean_sents(sents)
     t_sent = sent_list[1]
     h_sent = sent_list[2]
@@ -1663,6 +1663,13 @@ function get_labels(label_file, multilabel)
   return label2idx, idx2label
 end
 
+function seq.zip2(iter1, iter2)
+  iter1 = seq.iter(iter1)
+  iter2 = seq.iter(iter2)
+  return function()
+    return iter1(),iter2(
+  end
+end
 
 function seq.zip3(iter1, iter2, iter3)
   iter1 = seq.iter(iter1)
