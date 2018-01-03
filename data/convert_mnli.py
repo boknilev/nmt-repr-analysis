@@ -1,7 +1,5 @@
-import pdb
-import pandas as pd
-import csv 
 import sys
+import csv 
 
 #https://stackoverflow.com/questions/15063936/csv-error-field-larger-than-field-limit-131072
 csv.field_size_limit(sys.maxsize)
@@ -33,9 +31,6 @@ for f in ["train", "dev_matched", "dev_mismatched"]:
         print "Skipping line number %d in %s because of label: %s" % (line_num,f, lbl)
         total_skipped += 1
         continue
-
-      if "\n" in sent1 or "\n" in sent2:
-        pdb.set_trace()
 
       lbl_out.write(lbl.strip() + "\n")
       source_out.write(sent1.strip() + "|||" + sent2.strip() + "\n")
