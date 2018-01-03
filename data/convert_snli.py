@@ -9,7 +9,7 @@ for f in ["train", "dev", "test"]:
   sentence_twos = df['sentence2']
   labels = df['gold_label']
   assert(len(labels) == len(sentence_ones) == len(sentence_twos))
-  lbl_out = open("../cl_snli_%s_lbl_file" % (f), "wb")
+  lbl_out = open("snli_1.0/cl_snli_%s_lbl_file" % (f), "wb")
   source_out = open("snli_1.0/cl_snli_%s_source_file" % (f), "wb")
   label_set = set(["entailment","neutral","contradiction"])
   for i in range(len(labels)):
