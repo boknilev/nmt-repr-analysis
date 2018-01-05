@@ -440,7 +440,7 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
     if pred_file then
       local _, pred_idx =  classifier_out:transpose(1,2):max(1)
       pred_idx = pred_idx:long()[1]
-      local pred_label = idx2label[pred_idx]
+      local pred_label = idx2label[pred_idx[1]]
       table.insert(pred_labels, pred_label)
     end
 
