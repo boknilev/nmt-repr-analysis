@@ -5,9 +5,12 @@ import csv
 csv.field_size_limit(sys.maxsize)
 
 total_skipped = 0
-label_set = set(["entailment","neutral","contradiction"])
-for f in ["train", "dev_matched", "dev_mismatched"]:
-  with open("multinli_1.0/multinli_1.0_%s.txt" % (f), "rb") as tsvin:
+label_set = set(["entailment","neutral","contradiction", "hidden"])
+for f in ["train", "dev_matched", "dev_mismatched", "test_matched_unlabeled", "test_mismatched_unlabeled"]:
+  version = "1.0"
+  if "test" in f:
+    version = "0.9"
+  with open("multinli_1.0/multinli_%s_%s.txt" % (version, f), "rb") as tsvin:
     tsvin = csv.reader(tsvin, delimiter='\t', quoting=csv.QUOTE_NONE)
   
     lbl_out = open("multinli_1.0/cl_multinli_%s_lbl_file" % (f), "wb")
