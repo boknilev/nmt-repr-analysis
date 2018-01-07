@@ -43,6 +43,14 @@ Once you've run `train.lua` and have some models saved, you can run `th src/eval
 * `cl_pred_file`: Prefix to save prediction files (should be base name, not full path)
 * `cl_enc_layer`: Which layer in the encoder/decoder to use for word representation (0 for word embeddings)
 
+### Optional command line arguments
+Here are some optional command line arguments that are useful:
+
+* `cl_avg_reps`: Whether to average the hidden representations states for the sentences. Otherwise we use the right-most hidden state from the forward LSTM encoder and the left most from the backwards LSTM encoder.
+* `cl_entailment`: Whether to train the classifier to classifier sentence pairs for textual entailment
+* `brnn`: Whether to use the forward and backword LSTM encoders. By default just the forward LSTM encoder is used.
+* `cl_enc_layer`: Which hidden layer to extract the hidden states from. This command line argument needs to be followed by an integer. By defualt, the argument is set to 0. Warning: the integer must be less than or equal to the number of hidden states in the NMT model, otherwise you will run into a error related to indexing out of bounds.
+
 ## Citing
 If you use this code in your work, please consider citing our paper:
 
