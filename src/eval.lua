@@ -368,6 +368,7 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
         t_context[{{},t}]:copy(t_enc_out[module_num])
       end
     end
+    local t_mean_forward = t_context:mean(2)[{{}, 1}]
     local t_right_forward = t_context[{{}, t_source_l}]
     t_context:zero()
     if model_opt.brnn == 1 then
@@ -406,6 +407,7 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
         h_context[{{},t}]:copy(h_enc_out[module_num])
       end
     end
+    local_h_mean_forward = h_context:mean(2)[{{}, 1}]
     local h_right_forward = h_context[{{}, h_source_l}]
     h_context:zero()
     if model_opt.brnn == 1 then
@@ -429,10 +431,16 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
     end
 
     local classifier_input
-    if model_opt.brnn == 1 then
+    if model_opt.brnn == 1 and classifier_opt.avg_reps then
+      classifier_input = torch.cat(t_mean_forward, t_context:mean(2)[{{}, 1}])
+      classifier_input = torch.cat(classifier_input, h_mean_forward)
+      classifier_input = torch.cat(classifier_input, h_context:mean(2)[{{}, 1}])
+    elseif modeL_opt.brnn == 1 then
       classifier_input = torch.cat(t_right_forward, t_context[{{},1}])
       classifier_input = torch.cat(classifier_input, h_right_forward)
       classifier_input = torch.cat(classifier_input, h_context[{{},1}])
+    elseif classifier_opt.avg_reps then
+      classifier_input = torch.cat(t_mean_forward, h_mean_forward)
     else
       classifier_input = torch.cat(t_context[{{},t_source_l}], h_context[{{},h_source_l}])
     end
