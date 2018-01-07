@@ -193,7 +193,7 @@ function main()
     end
     local val_loss
     if classifier_opt.entailment then
-      val_loss = eval_entailment(val_data, epoch, val_logger, 'val')
+      val_loss = eval_entailment(val_data, epoch, val_logger, 'val', 'val_pred')
     else
       val_loss = eval(val_data, epoch, val_logger, 'val')
     end
@@ -824,7 +824,7 @@ function train_entailment(train_data, epoch)
           classifier_input = torch.cat(t_mean_forward, t_context:mean(2)[{{}, 1}])
           classifier_input = torch.cat(classifier_input, h_mean_forward)
           classifier_input = torch.cat(classifier_input, h_context:mean(2)[{{}, 1}])
-        elseif modeL_opt.brnn == 1 then
+        elseif model_opt.brnn == 1 then
           classifier_input = torch.cat(t_right_forward, t_context[{{},1}])
           classifier_input = torch.cat(classifier_input, h_right_forward)
           classifier_input = torch.cat(classifier_input, h_context[{{},1}])
@@ -1388,7 +1388,7 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
       classifier_input = torch.cat(t_mean_forward, t_context:mean(2)[{{}, 1}])
       classifier_input = torch.cat(classifier_input, h_mean_forward)
       classifier_input = torch.cat(classifier_input, h_context:mean(2)[{{}, 1}])
-    elseif modeL_opt.brnn == 1 then
+    elseif model_opt.brnn == 1 then
       classifier_input = torch.cat(t_right_forward, t_context[{{},1}])
       classifier_input = torch.cat(classifier_input, h_right_forward)
       classifier_input = torch.cat(classifier_input, h_context[{{},1}])

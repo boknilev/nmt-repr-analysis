@@ -435,7 +435,7 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
       classifier_input = torch.cat(t_mean_forward, t_context:mean(2)[{{}, 1}])
       classifier_input = torch.cat(classifier_input, h_mean_forward)
       classifier_input = torch.cat(classifier_input, h_context:mean(2)[{{}, 1}])
-    elseif modeL_opt.brnn == 1 then
+    elseif model_opt.brnn == 1 then
       classifier_input = torch.cat(t_right_forward, t_context[{{},1}])
       classifier_input = torch.cat(classifier_input, h_right_forward)
       classifier_input = torch.cat(classifier_input, h_context[{{},1}])
