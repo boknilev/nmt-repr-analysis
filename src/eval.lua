@@ -486,7 +486,7 @@ function load_data(classifier_opt, label2idx)
   print(classifier_opt.entailment)
   if classifier_opt.entailment then
     unknown_labels = 0
-    test_data = load_source_entailment_data(classifier_opt.test_source_file, classifier_opt.test_lbl_file, label2idx, classifier_opt.max_sent_len)
+    test_data = load_source_entailment_data(classifier_opt.test_source_file, classifier_opt.test_lbl_file, label2idx)
     print('==> words with unknown labels in train data: ' .. unknown_labels)
     assert(unknown_labels == 0, 'Test data contained an unknown label')
   elseif classifier_opt.enc_or_dec == 'enc' then
