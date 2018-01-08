@@ -51,7 +51,6 @@ function main()
   -- second pass: prepare data as vectors
   print('==> second pass: loading data')
   test_data = load_data(classifier_opt, label2idx)
-
   print('model_opt.brnn: ' .. model_opt.brnn) 
   -- use trained encoder/decoder from MT model
   encoder, decoder = model[1], model[2]
@@ -553,10 +552,10 @@ function load_source_entailment_data(file, label_file, label2idx, max_sent_len)
     if h_source:dim() == 0 then
       print('Warning: empty source vector in hypothesis sentence ' .. h_sent)
     end
-    h_l, t_l = #stringx.split(h_sent, " "), #stringx.split(t_sent, " ")
-    if h_l <= max_sent_len and h_l >= 1 and t_l <= max_sent_len and t_l >= 1 then
-      table.insert(data, {t_source, h_source, label2idx[label]})
-    end
+    --h_l, t_l = #stringx.split(h_sent, " "), #stringx.split(t_sent, " ")
+    --if h_l <= max_sent_len and h_l >= 1 and t_l <= max_sent_len and t_l >= 1 then
+    table.insert(data, {t_source, h_source, label2idx[label]})
+    --end
   end
   return data
 end
@@ -621,7 +620,7 @@ function seq.zip2(iter1, iter2)
   iter1 = seq.iter(iter1)
   iter2 = seq.iter(iter2)
   return function()
-    return iter1(),iter2()
+    return iter1(), iter2()
   end
 end
 
