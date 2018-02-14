@@ -20,3 +20,8 @@ unzip multinli_1.0
 
 echo "Reformatting Multi-NLI dataset"
 python convert_mnli.py
+
+echo "Downloading Compositional NLI"
+mdkir compositional-rte
+cd compositional-rte
+svn export https://github.com/ishita-dg/ScrambleTests/trunk/testData/
