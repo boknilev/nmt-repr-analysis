@@ -109,6 +109,14 @@ function main()
     if model_opt.brnn then
       classifier_input_size = classifier_input_size + classifier_input_size
     end
+    if classifier_opt.inferSent_reps then
+      -- We have already dealt with the first concatentation. Since we now
+      -- also concat the absolute element-wise difference and the element-wise product 
+      -- of the context and hypothesis, we just need to add one more 
+      -- classifier_input_size because the resulting vector from those two operations
+      -- is the same size as the input vectors
+      classifier_input_size = classifier_input_size + classifier_input_size
+    end
   end
   
   
