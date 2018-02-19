@@ -96,6 +96,7 @@ cmd:option('-cl_verbose', false, 'Print a lot of information')
 cmd:option('-cl_write_test_word_repr', false, 'Whether to write word representations to file (must specify cl_test_word_repr_file)')
 cmd:option('-cl_test_word_repr_file', '', 'Path to file to write word representations of test data (should be full path)')
 cmd:option('-cl_avg_reps', false, 'Whether to average the hidden representations states for the sentences')
+cmd:option('-cl_inferSent_reps', false, 'Whether to use the sentence representations as described in the InferSent paper')
 
 function copy(orig)
   local orig_type = type(orig)
