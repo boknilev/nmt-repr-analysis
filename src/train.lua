@@ -740,13 +740,14 @@ function train_entailment(train_data, epoch)
             t_context[{{},t}]:copy(t_enc_out[module_num])
           end
         end
-        local t_mean_or_max_forward
+        local t_forward
         if classifier_opt.inferSent_reps then
-          t_mean_or_max_forward = t_context:max(2)[{{}, 1}]
+          t_forward = t_context:max(2)[{{}, 1}]
         elseif classifier_opt.avg_reps then
-          t_mean_or_max_forward = t_context:mean(2)[{{}, 1}]
+          t_forward = t_context:mean(2)[{{}, 1}]
+        else
+          t_forward = t_context[{{}, h_source_l}]
         end
-        local t_right_forward = t_context[{{}, t_source_l}]
         -- zero out t_context so that we can just take the left most
         -- hidden state from the backward encoder
         t_context:zero()
@@ -794,8 +795,14 @@ function train_entailment(train_data, epoch)
             h_context[{{},t}]:copy(h_enc_out[module_num])
           end
         end
-        local h_mean_forward = h_context:mean(2)[{{}, 1}]
-        local h_right_forward = h_context[{{}, h_source_l}]
+        local h_forward
+        if classifier_opt.inferSent_reps then
+          h_forward = h_context:max(2)[{{}, 1}]
+        elseif classifier_opt.avg_reps then
+          h_forward = h_context:mean(2)[{{}, 1}]
+        else
+          h_forward = h_context[{{}, h_source_l}]
+        end
         -- zero out h_context so that we can just take the left most
         -- hidden state from the backward encoder
         h_context:zero()
@@ -826,18 +833,18 @@ function train_entailment(train_data, epoch)
         -- combine encoded t and h sentences for the classifier
         local classifier_input
         if model_opt.brnn == 1 and classifier_opt.avg_reps then
-          classifier_input = torch.cat(t_mean_or_max_forward, t_context:mean(2)[{{}, 1}])
-          classifier_input = torch.cat(classifier_input, h_mean_forward)
+          classifier_input = torch.cat(t_forward, t_context:mean(2)[{{}, 1}])
+          classifier_input = torch.cat(classifier_input, h_forward)
           classifier_input = torch.cat(classifier_input, h_context:mean(2)[{{}, 1}])
         elseif model_opt.brnn = 1 and classifier_opt.inferSent_reps then
           -- add max pooling and combinations of sentence representations
 
         elseif model_opt.brnn == 1 then
-          classifier_input = torch.cat(t_right_forward, t_context[{{},1}])
-          classifier_input = torch.cat(classifier_input, h_right_forward)
+          classifier_input = torch.cat(t_forward, t_context[{{},1}])
+          classifier_input = torch.cat(classifier_input, h_forward)
           classifier_input = torch.cat(classifier_input, h_context[{{},1}])
         elseif classifier_opt.avg_reps then
-          classifier_input = torch.cat(t_mean_or_max_forward, h_mean_forward)
+          classifier_input = torch.cat(t_forward, h_forward)
         else
           classifier_input = torch.cat(t_context[{{},t_source_l}], h_context[{{},h_source_l}])
         end
@@ -1318,13 +1325,14 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
         t_context[{{},t}]:copy(t_enc_out[module_num])
       end
     end
-    local t_mean_or_max_forward
+    local t_forward
     if classifier_opt.inferSent_reps then
-      t_mean_or_max_forward = t_context:max(2)[{{}, 1}]
+      t_forward = t_context:max(2)[{{}, 1}]
     elseif classifier_opt.avg_reps then
-      t_mean_or_max_forward = t_context:mean(2)[{{}, 1}]
-    end 
-    local t_right_forward = t_context[{{}, t_source_l}]
+      t_forward = t_context:mean(2)[{{}, 1}]
+    else
+      t_forward = t_context[{{}, h_source_l}]
+    end
     -- zero out t_context so that we can just take the left most
     -- hidden state from the backward encoder
     t_context:zero()
@@ -1367,8 +1375,14 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
         h_context[{{},t}]:copy(h_enc_out[module_num])
       end
     end
-    local h_mean_forward = h_context:mean(2)[{{}, 1}]
-    local h_right_forward = h_context[{{}, h_source_l}]
+    local h_forward
+    if classifier_opt.inferSent_reps then
+      h_forward = h_context:max(2)[{{}, 1}]
+    elseif classifier_opt.avg_reps then
+      h_forward = h_context:mean(2)[{{}, 1}]
+    else
+      h_forward = h_context[{{}, h_source_l}]
+    end
     -- zero out h_context so that we can just take the left most
     -- hidden state from the backward encoder
     h_context:zero()
@@ -1398,15 +1412,15 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
     -- combine encoded t and h sentences for the classifier
     local classifier_input
     if model_opt.brnn == 1 and classifier_opt.avg_reps then
-      classifier_input = torch.cat(t_mean_or_max_forward, t_context:mean(2)[{{}, 1}])
-      classifier_input = torch.cat(classifier_input, h_mean_forward)
+      classifier_input = torch.cat(t_forward, t_context:mean(2)[{{}, 1}])
+      classifier_input = torch.cat(classifier_input, h_forward)
       classifier_input = torch.cat(classifier_input, h_context:mean(2)[{{}, 1}])
     elseif model_opt.brnn == 1 then
-      classifier_input = torch.cat(t_right_forward, t_context[{{},1}])
-      classifier_input = torch.cat(classifier_input, h_right_forward)
+      classifier_input = torch.cat(t_forward, t_context[{{},1}])
+      classifier_input = torch.cat(classifier_input, h_forward)
       classifier_input = torch.cat(classifier_input, h_context[{{},1}])
     elseif classifier_opt.avg_reps then
-      classifier_input = torch.cat(t_mean_or_max_forward, h_mean_forward)
+      classifier_input = torch.cat(t_forward, h_forward)
     else
       classifier_input = torch.cat(t_context[{{},t_source_l}], h_context[{{},h_source_l}])
     end
