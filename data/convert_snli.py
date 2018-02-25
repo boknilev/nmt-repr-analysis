@@ -1,4 +1,5 @@
 import pandas as pd
+import nltk
 
 for f in ["train", "dev", "test"]:
   df = pd.read_table("snli_1.0/snli_1.0_%s.txt" % (f))
@@ -19,7 +20,7 @@ for f in ["train", "dev", "test"]:
       if sentence_twos[i].isdigit() or sentence_ones[i].isdigit():
         continue
       lbl_out.write(labels[i].strip() + "\n")
-      source_out.write(sentence_ones[i].strip() + "|||" + sentence_twos[i].strip() + "\n")
+      source_out.write(" ".join(nltk.word_tokenize(sentence_ones[i].strip())) + "|||" + " ".join(nltk.word_tokenize(sentence_twos[i].strip())) + "\n")
     except:
       continue
       # There are a lot of examples where only the premise sentence was given
