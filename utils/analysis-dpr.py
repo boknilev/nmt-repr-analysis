@@ -2,6 +2,8 @@ import itertools
 import pdb
 import argparse
 
+PRONOUNS = set(("he", "they", "she", "it", "him", "her"))
+
 def get_data(args):
  lbls_file = open(args.gold)
  src_file = open(args.src)
@@ -21,13 +23,38 @@ def get_sents_by_word(data, word):
 
   return ids
 
+def get_pair_by_pronoun(data):
+  pronoun_to_lbl = {}
+  total_pairs = 0
+  missed_pronouns = set()
+  for pronoun in PRONOUNS:
+    pronoun_to_lbl[pronoun] = {'correct': {'entailed': [], 'not-entailed': []}, 'incorrect': {'entailed': [], 'not-entailed': []} }
+    for idx, trip in data.items():
+      src = trip[2].split("|||")
+      context = src[0]
+      hyp = src[1]
+      if pronoun in context.lower() and pronoun not in hyp.lower():
+        total_pairs += 1
+        gold = trip[0].strip()
+        pred = trip[1].strip()
+        if gold == pred:
+          pronoun_to_lbl[pronoun]['correct'][gold].append(trip[2])
+        else:
+          #incorrect is based off of the gold label, not pred label
+          pronoun_to_lbl[pronoun]['incorrect'][gold].append(trip[2])
+      else:
+        set_diff = set(context.split()).difference(set(hyp.split())) 
+        assert (len(set_diff) == 1, "more than one word difference")
+        word = list(set_diff)[0]
+        if word not in PRONOUNS:
+          missed_pronouns.add(word)
+
+  return pronoun_to_lbl
 
 def main(args):
   data = get_data(args) #args.src, args.gold, args.pred)
 
-  she_sents = get_sents_by_word(data, "she")
-  print [data[i][1] for i in she_sents]
-  pdb.set_trace()
+  pronoun_to_lbl = get_pair_by_pronoun(data)
 
 if __name__ == '__main__':
 
