@@ -47,29 +47,64 @@ def main(args):
 
   role2idx = get_idx_by_role(data)
 
-  role2pos_count = {}
+  role2pos_count, role2not_count = {}, {}
+  role2lang2stats = {} # stat is [entailed_correct, not_correct]
+  for role in role2idx:
+    role2lang2stats[role] = {'ar': [0.0, 0.0], 'es': [0.0, 0.0], 'zh': [0.0, 0.0], 'de': [0.0, 0.0]}
   print "\small{%s}\t& %s\t& %s\t& %s \t& %s\t& %s & & & %s\\\\ \\hline" % ("Proto-Role", "ar", "es", "zh", "de", "avg", "MAJ")
   for role, locs in role2idx.items():
     if role not in role2pos_count:
       role2pos_count[role] = 0.0
+    if role not in role2not_count:
+      role2not_count[role] = 0.0
     role_tot, ar_corr, es_corr, zh_corr, de_corr = 0.0, 0, 0, 0, 0
     for loc in locs:
       if "not" not in data[loc][0]:
         role2pos_count[role] += 1
+      else:
+          role2not_count[role] += 1
       if data[loc][0] == data[loc][2]:
         ar_corr += 1
+        if "not" not in data[loc][0]:
+          role2lang2stats[role]['ar'][0] += 1
+        else:
+          role2lang2stats[role]['ar'][1] += 1
       if data[loc][0] == data[loc][3]:
         es_corr += 1
+        if "not" not in data[loc][0]:
+          role2lang2stats[role]['es'][0] += 1
+        else:
+          role2lang2stats[role]['es'][1] += 1
       if data[loc][0] == data[loc][4]:
         zh_corr += 1
+        if "not" not in data[loc][0]:
+          role2lang2stats[role]['zh'][0] += 1
+        else:
+          role2lang2stats[role]['zh'][1] += 1
       if data[loc][0] == data[loc][5]:
         de_corr += 1 
+        if "not" not in data[loc][0]:
+          role2lang2stats[role]['de'][0] += 1
+        else:
+          role2lang2stats[role]['de'][1] += 1
       role_tot += 1.0
     print "\small{%s}\t& %.1f\t& %.1f\t& %.1f \t& %.1f\t& %.1f\t& & & %.1f \\\\" % (role2str[role], 100*ar_corr/role_tot, 100*es_corr/role_tot, 100*zh_corr/role_tot, 100*de_corr/role_tot, \
                                      100*(ar_corr + es_corr + zh_corr + de_corr)/ (4 * role_tot), 100*(max(1 - (role2pos_count[role]/role_tot), (role2pos_count[role]/role_tot))))
     if 1 - (role2pos_count[role]/role_tot) <  (role2pos_count[role]/role_tot):
       maj_entailed += 1
   print "For %.2f percent of the roles, the majority label was entailed." % (100 * maj_entailed / len(role2idx))
+  print
+
+  print "\small{%s}\t& %s\t& %s\t& %s\t& %s\t& %s\t& %s\t& %s \t& %s\t& %s\t& %s\\\\ \\hline" % ("Proto-Role", "ar ent", "ar not", "es ent", "es not", "zh ent", "zh not", "de ent", "de not", "avg ent", "avg not")
+  for role in role2lang2stats:
+    print "\small{%s}\t& %.1f\t& %.1f\t& %.1f\t& %.1f\t& %.1f\t& %.1f\t& %.1f\t& %.1f\t& %.1f\t& %.1f \\\\" % \
+            (role2str[role], 100*role2lang2stats[role]['ar'][0]/role2pos_count[role], 100*role2lang2stats[role]['ar'][1]/role2not_count[role], \
+            100*role2lang2stats[role]['es'][0]/role2pos_count[role], 100*role2lang2stats[role]['es'][1]/role2not_count[role], \
+            100*role2lang2stats[role]['zh'][0]/role2pos_count[role], 100*role2lang2stats[role]['zh'][1]/role2not_count[role], \
+            100*role2lang2stats[role]['de'][0]/role2pos_count[role], 100*role2lang2stats[role]['de'][1]/role2not_count[role], \
+            100*(role2lang2stats[role]['ar'][0]+role2lang2stats[role]['es'][0]+role2lang2stats[role]['zh'][0]+role2lang2stats[role]['de'][0])/(4 * role2pos_count[role]), \
+            100*(role2lang2stats[role]['ar'][1]+role2lang2stats[role]['es'][1]+role2lang2stats[role]['zh'][1]+role2lang2stats[role]['de'][1])/(4 * role2not_count[role]))
+    
 
 
 if __name__ == '__main__':
