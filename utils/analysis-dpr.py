@@ -1,6 +1,7 @@
 import itertools
 import pdb
 import argparse
+import pandas as pd
 
 PRONOUNS = set(("he", "they", "she", "it", "him", "her"))
 
@@ -51,10 +52,25 @@ def get_pair_by_pronoun(data):
 
   return pronoun_to_lbl
 
+def convert_to_df(pronoun_to_lbl):
+ data = pd.DataFrame(columns=["Pronoun", "label", "incorrect", "correct"])
+  for pronoun in pronoun_to_lbl:
+    for label in pronoun_to_lbl[pronoun]['correct']:
+      correct_count = len(pronoun_to_lbl[pronoun]['correct'][label])
+      incorrect_count = len(pronoun_to_lbl[pronoun]['incorrect'][label])
+
+      if correct_count == 0 and incorrect_count == 0:
+        continue
+
+      data = data.append({"Pronoun":pronoun, "label":label, "incorrect": incorrect_count, "correct": correct_count}, ignore_index=True)
+
+  return data
+
 def main(args):
   data = get_data(args) #args.src, args.gold, args.pred)
 
   pronoun_to_lbl = get_pair_by_pronoun(data)
+  df = convert_to_df(pronoun_to_lbl)
 
 if __name__ == '__main__':
 
