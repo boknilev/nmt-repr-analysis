@@ -2,7 +2,7 @@ import itertools
 import pdb
 import argparse
 
-PROTO_ROLES = set(["sentient", "aware of being involved", "existed after", "existed before", "existed during", "chose to be involved", "changed possession", "describes the location", "stationary during", "made physical contact with someone or something", "used in", "caused a change", "changes location during", "altered or somehow changed during", "existed as a physical object", "caused the", "used in carrying out"])
+PROTO_ROLES = set(["sentient", "aware of being involved", "existed after", "existed before", "existed during", "chose to be involved", "changed possession", "describes the location", "stationary during", "made physical contact with someone or something", "caused a change", "changes location during", "altered or somehow changed during", "existed as a physical object", "caused the", "used in carrying out"])
 
 def get_data(args):
  lbls_file = open(args.gold)
@@ -58,8 +58,8 @@ def main(args):
       if data[loc][0] == data[loc][5]:
         de_corr += 1 
       role_tot += 1.0
-    print "\small{%s}\t& %.1f\t& %.1f\t& %.1f \t& %.1f\t& %.1f\t& & & %.1f \\\\" % (role, 100*ar_corr/role_tot, 100*es_corr/role_tot, 100*zh_corr/role_tot, 100*de_corr/role_tot, \
-                                     100*(ar_corr + es_corr + zh_corr + de_corr)/ (4 * role_tot), 100*(max(1 - (role2pos_count[role]/role_tot), (role2pos_count[role]/role_tot))))
+    print "\small{%s}\t& %.1f\t& %.1f\t& %.1f \t& %.1f\t& %.1f\t& & & %.1f \\\\  %d" % (role, 100*ar_corr/role_tot, 100*es_corr/role_tot, 100*zh_corr/role_tot, 100*de_corr/role_tot, \
+                                     100*(ar_corr + es_corr + zh_corr + de_corr)/ (4 * role_tot), 100*(max(1 - (role2pos_count[role]/role_tot), (role2pos_count[role]/role_tot))), role_tot)
     if 1 - (role2pos_count[role]/role_tot) <  (role2pos_count[role]/role_tot):
       maj_entailed += 1
   print "For %.2f percent of the roles, the majority label was entailed." % (100 * maj_entailed / len(role2idx))
