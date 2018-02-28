@@ -25,3 +25,10 @@ echo "Downloading Compositional NLI"
 mdkir compositional-rte
 cd compositional-rte
 svn export https://github.com/ishita-dg/ScrambleTests/trunk/testData/
+
+echo "Getting the original FN+ data for analysis"
+mkdir fnplus_orig
+cd fnplus_orig
+wget http://www.seas.upenn.edu/~nlp/resources/FN+.zip
+unzip FN+.zip
+rm -r __MACOSX/ FN+.zip
