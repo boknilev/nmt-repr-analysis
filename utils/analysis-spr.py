@@ -4,6 +4,13 @@ import argparse
 
 PROTO_ROLES = set(["sentient", "aware of being involved", "existed after", "existed before", "existed during", "chose to be involved", "changed possession", "describes the location", "stationary during", "made physical contact with someone or something", "caused a change", "changes location during", "altered or somehow changed during", "existed as a physical object", "caused the", "used in carrying out"])
 
+role2str = {"sentient" : "sentient", "aware of being involved" : "aware", "existed after" : "existed after", \
+            "existed before" : "existed before", "existed during" : "existed during", "chose to be involved" : "volitional", \
+            "changed possession" : "chang. possession", "describes the location": "location", "stationary during" : "stationary during" , \
+            "made physical contact with someone or something" : "physical contact", "caused a change" : "changed", \
+            "changes location during" : "moved", "altered or somehow changed during" : "changed", \
+            "existed as a physical object" : "physically existed", "caused the" : "caused", "used in carrying out" : "used in"}
+
 def get_data(args):
  lbls_file = open(args.gold)
  src_file = open(args.src)
@@ -58,8 +65,8 @@ def main(args):
       if data[loc][0] == data[loc][5]:
         de_corr += 1 
       role_tot += 1.0
-    print "\small{%s}\t& %.1f\t& %.1f\t& %.1f \t& %.1f\t& %.1f\t& & & %.1f \\\\  %d" % (role, 100*ar_corr/role_tot, 100*es_corr/role_tot, 100*zh_corr/role_tot, 100*de_corr/role_tot, \
-                                     100*(ar_corr + es_corr + zh_corr + de_corr)/ (4 * role_tot), 100*(max(1 - (role2pos_count[role]/role_tot), (role2pos_count[role]/role_tot))), role_tot)
+    print "\small{%s}\t& %.1f\t& %.1f\t& %.1f \t& %.1f\t& %.1f\t& & & %.1f \\\\" % (role2str[role], 100*ar_corr/role_tot, 100*es_corr/role_tot, 100*zh_corr/role_tot, 100*de_corr/role_tot, \
+                                     100*(ar_corr + es_corr + zh_corr + de_corr)/ (4 * role_tot), 100*(max(1 - (role2pos_count[role]/role_tot), (role2pos_count[role]/role_tot))))
     if 1 - (role2pos_count[role]/role_tot) <  (role2pos_count[role]/role_tot):
       maj_entailed += 1
   print "For %.2f percent of the roles, the majority label was entailed." % (100 * maj_entailed / len(role2idx))
@@ -79,4 +86,4 @@ if __name__ == '__main__':
 
   main(args)
 
-#python analysis-dpr.py --src /export/ssd/apoliak/nmt-repr-anaysis-sem/data/rte/cl_dpr_val_source_file --gold /export/ssd/apoliak/nmt-repr-anaysis-sem/data/rte/cl_dpr_val_lbl_file --pred /export/ssd/apoliak/nmt-repr-anaysis-sem/output/dpr-dpr/linear_classifier/en-de/pred_file.epoch2 
+#python analysis-spr.py --src /export/ssd/apoliak/nmt-repr-anaysis-sem/data/rte/cl_sprl_val_source_file --gold /export/ssd/apoliak/nmt-repr-anaysis-sem/data/rte/cl_sprl_val_lbl_file --de_pred /export/ssd/apoliak/nmt-repr-anaysis-sem/output/sprl-sprl/linear_classifier/en-de/test_pred_file.epoch2 --ar_pred /export/ssd/apoliak/nmt-repr-anaysis-sem/output/sprl-sprl/linear_classifier/en-de/test_pred_file.epoch2 --es_pred /export/ssd/apoliak/nmt-repr-anaysis-sem/output/sprl-sprl/linear_classifier/en-de/test_pred_file.epoch1 --zh_pred /export/ssd/apoliak/nmt-repr-anaysis-sem/output/sprl-sprl/linear_classifier/en-de/test_pred_file.epoch1
