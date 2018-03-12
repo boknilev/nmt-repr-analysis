@@ -122,7 +122,7 @@ def main(args):
 
 if __name__ == '__main__':
 
-  parser = argparse.ArgumentParser(description='Analysis on dpr.')
+  parser = argparse.ArgumentParser(description='Analysis on spr.')
   parser.add_argument('--src', help="path to source file")
   parser.add_argument('--gold', help="path to gold labels file")
   parser.add_argument('--ar_pred', help="path to en-ar pred labels file")

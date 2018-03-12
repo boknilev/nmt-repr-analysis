@@ -53,7 +53,7 @@ def get_pair_by_pronoun(data):
   return pronoun_to_lbl
 
 def convert_to_df(pronoun_to_lbl):
- data = pd.DataFrame(columns=["Pronoun", "label", "incorrect", "correct"])
+  data = pd.DataFrame(columns=["Pronoun", "label", "incorrect", "correct"])
   for pronoun in pronoun_to_lbl:
     for label in pronoun_to_lbl[pronoun]['correct']:
       correct_count = len(pronoun_to_lbl[pronoun]['correct'][label])
