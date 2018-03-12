@@ -48,7 +48,7 @@ Here are some optional command line arguments that are useful:
 * `cl_avg_reps`: Whether to average the hidden representations states for the sentences. Otherwise we use the right-most hidden state from the forward LSTM encoder and the left most from the backwards LSTM encoder.
 * `cl_entailment`: Whether to train the classifier to classifier sentence pairs for textual entailment
 * `cl_enc_layer`: Which hidden layer to extract the hidden states from. This command line argument needs to be followed by an integer. By defualt, the argument is set to 2. Warning: the integer must be less than or equal to the number of hidden states in the NMT model, otherwise you will run into a error related to indexing out of bounds.
-* `cl_inferSent_reps`: Whether to use the sentence representations and combine them as in Conneau (EMNLP '17)'s [InferSet](https://arxiv.org/pdf/1705.02364.pdf)
+* `cl_inferSent_reps`: Whether to use the sentence representations as described in Conneau (EMNLP '17)'s [InferSet](https://arxiv.org/pdf/1705.02364.pdf), otherwise the first and last hidden representations will be used and then the sentence reps. will be concatenated.
 
 ## Citing
 If you use this code in your work, please consider citing our paper:
@@ -64,6 +64,18 @@ bib
   year      = {2017},
   address   = {Vancouver},
   publisher = {Association for Computational Linguistics},
+}
+```
+
+If you use this code for RTE please cite the following paper as well:
+
+```
+@inproceedings{evaluating-fine-grained-semantic-phenomena-in-neural-machine-translation-encoders-using-entailment,
+  author = {Poliak, Adam and Belinkov, Yonatan and Glass, James and {Van Durme}, Benjamin},
+  title = {Evaluating Fine-grained Semantic Phenomena in Neural Machine Translation Encoders Using Entailment},
+  year = {2018},
+  numpages = {7},
+  booktitle = {Proceedings of the Annual Meeting of the North American Association of Computational Linguistics (NAACL)}
 }
 ```
 
