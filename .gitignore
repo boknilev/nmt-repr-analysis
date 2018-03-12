@@ -41,3 +41,11 @@ luac.out
 
 # Vim cache
 *.*~
+
+# Python compiles
+*.pyc
+
+# Entailment data
+data/compositional-rte/*
+data/rte/*
+data/snli/*
