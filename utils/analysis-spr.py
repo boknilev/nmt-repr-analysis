@@ -60,7 +60,7 @@ def main(args):
   print "\small{%s}\t& %s\t& %s\t& %s \t& %s\t& %s & & & %s\\\\ \\hline" % ("Proto-Role", "ar", "es", "zh", "de", "avg", "MAJ")
 
   for role in AGENT_ROLES + PATIENT_ROLES:
-    locs = role2idx[role]:
+    locs = role2idx[role]
     if role not in role2pos_count:
       role2pos_count[role] = 0.0
     if role not in role2not_count:
