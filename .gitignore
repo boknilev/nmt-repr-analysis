@@ -46,6 +46,5 @@ luac.out
 *.pyc
 
 # Entailment data
-data/compositional-rte/*
 data/rte/*
 data/snli/*
