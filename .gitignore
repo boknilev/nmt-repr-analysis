@@ -48,3 +48,7 @@ luac.out
 # Entailment data
 data/rte/*
 data/snli/*
+
+# Paper
+paper/*
+.DS_STORE

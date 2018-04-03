@@ -135,14 +135,3 @@ if __name__ == '__main__':
 
   main()
 
-'''
- pred_ar=open("/export/ssd/apoliak/nmt-repr-anaysis-sem/output/fnplus-fnplus/linear_classifier/en-ar/val_pred_file.epoch1")
- pred_es=open("/export/ssd/apoliak/nmt-repr-anaysis-sem/output/fnplus-fnplus/linear_classifier/en-es/val_pred_file.epoch1")
- pred_zh=open("/export/ssd/apoliak/nmt-repr-anaysis-sem/output/fnplus-fnplus/linear_classifier/en-zh/test_pred_file.epoch1")
- pred_de=open("/export/ssd/apoliak/nmt-repr-anaysis-sem/output/fnplus-fnplus/linear_classifier/en-de/val_pred_file.epoch1")
-
- gold=open("/export/ssd/apoliak/nmt-repr-anaysis-sem/data/rte/cl_fnplus_val_lbl_file")
- sents=open("/export/ssd/apoliak/nmt-repr-anaysis-sem/data/rte/cl_fnplus_val_source_file") 
-
-
-'''
