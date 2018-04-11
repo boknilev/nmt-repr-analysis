@@ -453,7 +453,7 @@ function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
       classifier_input = torch.cat(classifier_input, torch.abs(t_sent - h_sent))
       classifier_input = torch.cat(classifier_input, torch.cmul(h_sent, t_sent))
     elseif model_opt.brnn == 1 then
-      classifier_input = torch.cat(t_right_forward, t_context[{{},1}])
+      classifier_input = torch.cat(t_forward, t_context[{{},1}])
       classifier_input = torch.cat(classifier_input, h_forward)
       classifier_input = torch.cat(classifier_input, h_context[{{},1}])
     elseif classifier_opt.avg_reps then
