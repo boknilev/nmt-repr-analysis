@@ -1,6 +1,9 @@
 import argparse
 import csv
 import pdb
+import itertools
+import cPickle as pickle
+
 from stanfordcorenlp import StanfordCoreNLP
 
 def get_orig_fnplus():
@@ -49,7 +52,11 @@ def split_data_by_grammar(instances, corenlp_path):
   tags = set()
 
   for key,pair in instances.items():
-    print key
+    #if key > 20:
+    #  nlp.close()
+    #  return example_loc_to_grammar
+    if key % 250 == 0:
+      print key
     context = pair[0].strip()
     hyp = pair[1].strip()
 
@@ -64,8 +71,8 @@ def split_data_by_grammar(instances, corenlp_path):
     tags.add(hyp_pos[diff_loc][-1])
     tags.add(context_pos[diff_loc][-1])
 
-    print context_pos[diff_loc][-1][0],  hyp_pos[diff_loc][-1][0]
-    if context_pos[diff_loc][-1][0] ==  hyp_pos[diff_loc][-1][0]:
+    #print context_pos[diff_loc][-1][0],  hyp_pos[diff_loc][-1][0]
+    if context_pos[diff_loc][-1] ==  hyp_pos[diff_loc][-1]:
       example_loc_to_grammar[key] = 1 #if context_pos[diff_loc][-1] ==  hyp_pos[diff_loc][-1] else 0
     else:
       example_loc_to_grammar[key] = 0
@@ -76,12 +83,56 @@ def split_data_by_grammar(instances, corenlp_path):
   pdb.set_trace()
   return example_loc_to_grammar
 
+def compute_accuracies(example_loc, gold_f, ar_f, de_f, zh_f, es_f):
+  line_count = 0
+  pos_same_2_count = {1: [0, 0, 0, 0, 0], 0: [0, 0, 0, 0, 0]}
+  for gold, ar, de, es, zh in itertools.izip(open(gold_f), open(ar_f), open(de_f), open(es_f), open(zh_f)):
+  #for gold, ar, de, zh, es in itertools.izip(open(gold_f), open(ar_f), open(de_f), open(zh_f), open(es_f)):
+    pos_same = example_loc[line_count]
+    line_count += 1
+    #pdb.set_trace()
+
+    pos_same_2_count[pos_same][0] += 1
+    if gold.strip() == ar.strip():
+      pos_same_2_count[pos_same][1] += 1
+    if gold.strip() == de.strip():
+      pos_same_2_count[pos_same][4] += 1
+    if gold.strip() == es.strip():
+      pos_same_2_count[pos_same][2] += 1
+    if gold.strip() == zh.strip():
+      pos_same_2_count[pos_same][3] += 1
+
+  for key in pos_same_2_count:
+    for i in range(1, len(pos_same_2_count[key])):
+      pos_same_2_count[key][i] = float(pos_same_2_count[key][i]) / pos_same_2_count[key][0]
+
+  return pos_same_2_count
+
+def print_latex_table(accuracies):
+  table= "\\begin{tabular}{l|cccc|c} \n\
+    \\toprule %\hline \n\
+    	 & ar & es & zh & de & MAJ \\\\ \\midrule %\hline \n "
+  tot = float(accuracies[1][0] + accuracies[0][0])
+  table += "Same Tag & " + " & ".join(["%.2f" % (100*item) for item in accuracies[1][1:]]) + " & %.2f \\\\ \n" % (100*accuracies[1][0] / tot)
+  table += "Different Tag & " + " & ".join(["%.2f" % (100*item) for item in accuracies[0][1:]]) + " & %.2f \\\\ \n" % (100*accuracies[0][0] / tot)
+  table += "\\bottomrule %\hline \n \
+    \\end{tabular}"
+  print table
+
 def main(args):
   instances = get_source(args.src)
   print "got instances"
-  example_loc_to_grammar = split_data_by_grammar(instances, args.corenlp_path)
 
-  pdb.set_trace()  
+  example_loc_to_grammar = ""
+  if args.pos_tags:
+    example_loc_to_grammar = pickle.load(open(args.pos_tags, "rb"))
+  else:
+    example_loc_to_grammar = split_data_by_grammar(instances, args.corenlp_path)
+    pickle.dump(example_loc_to_grammar, open("example_loc_to_grammar.pkl", "wb"))
+
+  accuracies = compute_accuracies(example_loc_to_grammar, args.gold, args.ar_pred, args.de_pred, args.zh_pred, args.es_pred) 
+
+  print_latex_table(accuracies)
 
 
 if __name__ == '__main__':
@@ -94,6 +145,7 @@ if __name__ == '__main__':
   parser.add_argument('--zh_pred', help="path to pred labels file")
   parser.add_argument('--es_pred', help="path to pred labels file")
   parser.add_argument('--corenlp_path', help="path to CoreNLP directory")
+  parser.add_argument('--pos_tags', help="Path to pickle file of src with POS tags")
 
   args = parser.parse_args()
 
