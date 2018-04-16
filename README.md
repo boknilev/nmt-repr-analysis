@@ -67,12 +67,12 @@ bib
 }
 ```
 
-If you use this code for RTE please cite the following paper as well:
+If you use this code for NLI please cite the following paper as well:
 
 ```
 @inproceedings{evaluating-fine-grained-semantic-phenomena-in-neural-machine-translation-encoders-using-entailment,
   author = {Poliak, Adam and Belinkov, Yonatan and Glass, James and {Van Durme}, Benjamin},
-  title = {Evaluating Fine-grained Semantic Phenomena in Neural Machine Translation Encoders Using Entailment},
+  title = {On the Evaluation of Semantic Phenomena in Neural Machine Translation Using Natural Language Inference},
   year = {2018},
   numpages = {7},
   booktitle = {Proceedings of the Annual Meeting of the North American Association of Computational Linguistics (NAACL)}
