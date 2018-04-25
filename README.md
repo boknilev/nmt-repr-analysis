@@ -55,7 +55,6 @@ If you use this code in your work, please consider citing our paper:
 
 
 ```
-bib
 @InProceedings{belinkov:2017:acl,
   author    = {Belinkov, Yonatan  and  Durrani, Nadir and Dalvi, Fahim and Sajjad, Hassan and Glass, James},
   title     = {What do Neural Machine Translation Models Learn about Morphology?},
@@ -74,7 +73,6 @@ If you use this code for NLI please cite the following paper as well:
   author = {Poliak, Adam and Belinkov, Yonatan and Glass, James and {Van Durme}, Benjamin},
   title = {On the Evaluation of Semantic Phenomena in Neural Machine Translation Using Natural Language Inference},
   year = {2018},
-  numpages = {7},
   booktitle = {Proceedings of the Annual Meeting of the North American Association of Computational Linguistics (NAACL)}
 }
 ```
