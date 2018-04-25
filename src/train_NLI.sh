@@ -18,7 +18,3 @@ time CUDA_LAUNCH_BLOCKING=1  th train.lua \
  -cl_enc_layer 4 \
  -cl_write_test_word_repr \
  -cl_test_word_repr_file /export/ssd/apoliak/nmt-repr-anaysis-sem/output/test_word_reps
- #-cl_verbose \
- #-max_sent_l 9 \
- #-cl_max_sent_len 9 \
- #-model ../models/en-ar-model_epoch13.00_18.31.t7 \
