@@ -558,7 +558,7 @@ end
 function load_source_entailment_data(file, label_file, label2idx, max_sent_len)
   local max_sent_len = max_sent_len or math.huge
   data = {}
-  for sents, label in seq.zip2(io.lines(file), io.lines(label_file)) do
+  for sents, label in seq.zip(io.lines(file), io.lines(label_file)) do
     sent_list = beam.clean_sents(sents)
     t_sent = sent_list[1]
     h_sent = sent_list[2]
@@ -639,15 +639,6 @@ function get_labels(label_file)
   end
   return label2idx, idx2label
 end
-
-function seq.zip2(iter1, iter2)
-  iter1 = seq.iter(iter1)
-  iter2 = seq.iter(iter2)
-  return function()
-    return iter1(), iter2()
-  end
-end
-
 
 function seq.zip3(iter1, iter2, iter3)
   iter1 = seq.iter(iter1)
