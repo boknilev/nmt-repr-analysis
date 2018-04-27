@@ -7,7 +7,6 @@ require 'optim'
 seq = require 'pl.seq'
 stringx = require 'pl.stringx'
 
-
 function main()
   print(arg)
   beam.init(arg)
@@ -51,8 +50,8 @@ function main()
  
   -- second pass: prepare data as vectors
   print('==> second pass: loading data')
-  local test_data = load_data(classifier_opt, label2idx)
-    
+  test_data = load_data(classifier_opt, label2idx)
+  print('model_opt.brnn: ' .. model_opt.brnn) 
   -- use trained encoder/decoder from MT model
   encoder, decoder = model[1], model[2]
   if model_opt.brnn == 1 then
@@ -82,7 +81,12 @@ function main()
   
   -- do epochs
   epoch = 1
-  test_loss = eval(test_data, epoch, test_logger, 'test', classifier_opt.pred_file)
+  local test_loss
+  if classifier_opt.entailment then
+    test_loss = eval_entailment(test_data, epoch, test_logger, 'test', classifier_opt.pred_file)
+  else
+    test_loss = eval(test_data, epoch, test_logger, 'test', classifier_opt.pred_file)
+  end
   collectgarbage(); collectgarbage();
 end
 
@@ -296,9 +300,220 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
   
 end
 
+function eval_entailment(data, epoch, logger, test_or_val, pred_filename)
+  test_or_val = test_or_val or 'test'
+  local pred_file
+  if pred_filename then
+    pred_file = torch.DiskFile(pred_filename .. '.epoch' .. epoch, 'w')
+  end
+  local word_repr_file
+  if pred_file and classifier_opt.write_test_word_repr and classifier_opt.test_word_repr_file then
+    word_repr_file = torch.DiskFile(classifier_opt.test_word_repr_file, 'w')
+  end
+
+  local time = sys.clock()
+  classifier:evaluate()
+  encoder:evaluate(); decoder:evaluate();
+  if model_opt.brnn == 1 then encoder_brnn:evaluate() end
+
+  print('\n==> evaluating on ' .. test_or_val .. ' data')
+  print('==> epoch: ' .. epoch)
+  local loss, num_words, word_counter = 0, 0, 0
+  for i=1,#data do
+    xlua.progress(i, #data)
+    local t_source = data[i][1]
+    local h_source = data[i][2]
+    local label = data[i][3]
+    if opt.gpuid >= 0 then t_source = t_source:cuda(); h_source = h_source:cuda(); end
+
+    local t_source_l = math.min(t_source:size(1), opt.max_sent_l)
+    local h_source_l = math.min(h_source:size(1), opt.max_sent_l)
+    local t_source_input, h_source_input
+    if model_opt.use_chars_enc == 1 then
+      t_source_input = t_source:view(t_source_l, 1, t_source:size(2)):contiguous()
+      h_source_input = h_source:view(h_source_l, 1, h_source:size(2)):contiguous()
+    else
+      t_source_input = t_source:view(t_source_l, 1)
+      h_source_input = h_source:view(h_source_l, 1)
+    end
+
+    local t_context = context_proto[{{}, {1,t_source_l}}]:clone() -- 1 x source_l x rnn_size
+    local h_context = context_proto[{{}, {1,h_source_l}}]:clone() -- 1 x source_l x rnn_size
+
+    if classifier_opt.enc_layer == 0 then
+      if model_opt.use_chars_enc == 0 then
+        t_context = context_proto_word_vecs[{ {}, {1,t_source_l}, {} }]:clone()
+        h_context = context_proto_word_vecs[{ {}, {1,h_source_l}, {} }]:clone()
+      else
+        t_context = context_proto_char_cnn[{ {}, {1,t_source_l}, {} }]:clone()
+        h_context = context_proto_char_cnn[{ {}, {1,h_source_l}, {} }]:clone()
+      end
+    end
+
+    -- forward encoder for t sentence
+    local rnn_state_enc = {}
+    for i = 1, #init_fwd_enc do
+      table.insert(rnn_state_enc, init_fwd_enc[i]:zero())
+    end
+    local pred_labels = {}
+    for t = 1, t_source_l do
+      local t_enc_out
+      if classifier_opt.enc_layer > 0 then
+        local t_encoder_input = {t_source_input[t], table.unpack(rnn_state_enc)}
+        t_enc_out = encoder:forward(t_encoder_input)
+        rnn_state_enc = t_enc_out
+      end
+      if classifier_opt.enc_layer > 0 then
+        t_context[{{},t}]:copy(t_enc_out[module_num])
+      end
+    end
+    local t_forward
+    if classifier_opt.inferSent_reps then
+      t_forward = t_context:max(2)[{{}, 1}]
+    elseif classifier_opt.avg_reps then
+      t_forward = t_context:mean(2)[{{}, 1}]
+    else
+      t_forward = t_context[{{}, h_source_l}]
+    end
+    t_context:zero()
+    if model_opt.brnn == 1 then
+      for i = 1, #rnn_state_enc do
+        rnn_state_enc[i]:zero()
+      end
+      if classifier_opt.verbose then print('forward bwd encoder') end
+      for t = t_source_l, 1, -1 do
+        if classifier_opt.enc_layer > 0 then
+          local t_encoder_input = {t_source_input[t], table.unpack(rnn_state_enc)}
+          local t_enc_out = encoder_brnn:forward(t_encoder_input)
+          rnn_state_enc = t_enc_out
+          t_context[{{},t}]:add(t_enc_out[module_num])
+          if classifier_opt.verbose then
+            print('t: ' .. t)
+            print('t_encoder_input:'); print(t_encoder_input);
+            print('t_enc_out:'); print(t_enc_out);
+          end
+        end
+      end
+    end
+
+    -- forward encoder for h sentence
+    local rnn_state_enc = {}
+    for i = 1, #init_fwd_enc do
+      table.insert(rnn_state_enc, init_fwd_enc[i]:zero())
+    end
+    for t = 1, h_source_l do
+      local h_enc_out
+      if classifier_opt.enc_layer > 0 then
+        local h_encoder_input = {h_source_input[t], table.unpack(rnn_state_enc)}
+        h_enc_out = encoder:forward(h_encoder_input)
+        rnn_state_enc = h_enc_out
+      end
+      if classifier_opt.enc_layer > 0 then
+        h_context[{{},t}]:copy(h_enc_out[module_num])
+      end
+    end
+    local h_forward
+    if classifier_opt.inferSent_reps then
+      h_forward = h_context:max(2)[{{}, 1}]
+    elseif classifier_opt.avg_reps then
+      h_forward = h_context:mean(2)[{{}, 1}]
+    else
+      h_forward = h_context[{{}, h_source_l}]
+    end
+    h_context:zero()
+    if model_opt.brnn == 1 then
+      for i = 1, #rnn_state_enc do
+        rnn_state_enc[i]:zero()
+      end
+      if classifier_opt.verbose then print('forward bwd encoder') end
+      for t = h_source_l, 1, -1 do
+        if classifier_opt.enc_layer > 0 then
+          local h_encoder_input = {h_source_input[t], table.unpack(rnn_state_enc)}
+          local h_enc_out = encoder_brnn:forward(h_encoder_input)
+          rnn_state_enc = h_enc_out
+          h_context[{{},t}]:add(h_enc_out[module_num])
+          if classifier_opt.verbose then
+            print('t: ' .. t)
+            print('h_encoder_input:'); print(h_encoder_input);
+            print('h_enc_out:'); print(h_enc_out);
+          end
+        end
+      end
+    end
+
+    local classifier_input
+    if model_opt.brnn == 1 and classifier_opt.avg_reps then
+      classifier_input = torch.cat(t_forward, t_context:mean(2)[{{}, 1}])
+      classifier_input = torch.cat(classifier_input, h_forward)
+      classifier_input = torch.cat(classifier_input, h_context:mean(2)[{{}, 1}])
+    elseif model_opt.brnn == 1 and classifier_opt.inferSent_reps then
+      local t_sent = torch.cat(t_forward, t_context:max(2)[{{}, 1}])
+      local h_sent = torch.cat(h_forward, h_context:max(2)[{{}, 1}])
+      classifier_input = torch.cat(t_sent, h_sent)
+      classifier_input = torch.cat(classifier_input, torch.abs(t_sent - h_sent))
+      classifier_input = torch.cat(classifier_input, torch.cmul(h_sent, t_sent))
+    elseif model_opt.brnn == 1 then
+      classifier_input = torch.cat(t_forward, t_context[{{},1}])
+      classifier_input = torch.cat(classifier_input, h_forward)
+      classifier_input = torch.cat(classifier_input, h_context[{{},1}])
+    elseif classifier_opt.avg_reps then
+      classifier_input = torch.cat(t_forward, h_forward)
+    elseif classifier_opt.inferSent_reps then
+      local t_sent = t_forward
+      local h_sent = h_forward
+      classifier_input = torch.cat(t_sent, h_sent)
+      classifier_input = torch.cat(classifier_input, torch.abs(t_sent - h_sent))
+      classifier_input = torch.cat(classifier_input, torch.cmul(h_sent, t_sent))
+    else
+      classifier_input = torch.cat(t_context[{{},t_source_l}], h_context[{{},h_source_l}])
+    end
+    local classifier_out = classifier:forward(classifier_input)
+    if pred_file then
+      local _, pred_idx =  classifier_out:transpose(1,2):max(1)
+      pred_idx = pred_idx:long()[1]
+      local pred_label = idx2label[pred_idx[1]]
+      table.insert(pred_labels, pred_label)
+    end
+
+    loss = loss + criterion:forward(classifier_out, label)
+    num_words = num_words + 1
+
+    confusion:add(classifier_out[{1, {}}], label)
+
+    if pred_file then
+      pred_file:writeString(stringx.join(' ', pred_labels) .. '\n')
+    end
+  end
+  loss = loss/num_words
+
+  time = (sys.clock() - time) / #data
+  print('==> time to evaluate 1 sample = ' .. (time*1000) .. 'ms')
+  print('==> loss: ' .. loss)
+
+  print(confusion)
+
+  logger:add{['% mean class accuracy (' .. test_or_val .. ' set)'] = confusion.totalValid * 100}
+  if classifier_opt.plot then
+    logger:style{['% mean class accuracy (' .. test_or_val .. ' set)'] = '-'}
+    logger:plot()
+  end
+
+  confusion:zero()
+
+  if pred_file then pred_file:close() end
+  if word_repr_file then word_repr_file:close() end
+  return loss
+end
+
 function load_data(classifier_opt, label2idx)
   local test_data
-  if classifier_opt.enc_or_dec == 'enc' then
+  print(classifier_opt.entailment)
+  if classifier_opt.entailment then
+    unknown_labels = 0
+    test_data = load_source_entailment_data(classifier_opt.test_source_file, classifier_opt.test_lbl_file, label2idx)
+    print('==> words with unknown labels in train data: ' .. unknown_labels)
+    assert(unknown_labels == 0, 'Test data contained an unknown label')
+  elseif classifier_opt.enc_or_dec == 'enc' then
     unknown_labels = 0
     test_data = load_source_data(classifier_opt.test_source_file, classifier_opt.test_lbl_file, label2idx)   
     print('==> words with unknown labels in test data: ' .. unknown_labels)
@@ -340,6 +555,34 @@ function load_source_data(file, label_file, label2idx, max_sent_len)
   return data
 end
 
+function load_source_entailment_data(file, label_file, label2idx, max_sent_len)
+  local max_sent_len = max_sent_len or math.huge
+  data = {}
+  for sents, label in seq.zip(io.lines(file), io.lines(label_file)) do
+    sent_list = beam.clean_sents(sents)
+    t_sent = sent_list[1]
+    h_sent = sent_list[2]
+    local t_source, h_source
+    if model_opt.use_chars_enc == 0 then
+      t_source, _ = beam.sent2wordidx(t_sent, word2idx_src, model_opt.start_symbol)
+      h_source, _ = beam.sent2wordidx(h_sent, word2idx_src, model_opt.start_symbol)
+    else
+      t_source, _ = beam.sent2charidx(t_sent, char2idx, model_opt.max_word_l, model_opt.start_symbol)
+      h_source, _ = beam.sent2charidx(h_sent, char2idx, model_opt.max_word_l, model_opt.start_symbol)
+    end
+    if t_source:dim() == 0 then
+      print('Warning: empty source vector in test sentence ' .. t_sent)
+    end
+    if h_source:dim() == 0 then
+      print('Warning: empty source vector in hypothesis sentence ' .. h_sent)
+    end
+    --h_l, t_l = #stringx.split(h_sent, " "), #stringx.split(t_sent, " ")
+    --if h_l <= max_sent_len and h_l >= 1 and t_l <= max_sent_len and t_l >= 1 then
+    table.insert(data, {t_source, h_source, label2idx[label]})
+    --end
+  end
+  return data
+end
 
 function load_source_target_data(source_file, target_file, target_label_file, label2idx, max_sent_len)
   local max_sent_len = max_sent_len or math.huge
@@ -396,7 +639,6 @@ function get_labels(label_file)
   end
   return label2idx, idx2label
 end
-
 
 function seq.zip3(iter1, iter2, iter3)
   iter1 = seq.iter(iter1)

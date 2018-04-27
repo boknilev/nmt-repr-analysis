@@ -56,8 +56,11 @@ cmd:option('-cl_train_target_file', '', 'Path to train file with target sentence
 cmd:option('-cl_val_target_file', '', 'Path to validation file with target sentences')
 cmd:option('-cl_test_target_file', '', 'Path to test file with target sentences')
 cmd:option('-cl_train_head_file', '', 'Path to train file with dependency head indices')
-cmd:option('-cl_val_head_file', '', 'Path to train file with dependency head indices')
-cmd:option('-cl_test_head_file', '', 'Path to train file with dependency head indices')
+cmd:option('-cl_val_head_file', '', 'Path to validation file with dependency head indices')
+cmd:option('-cl_test_head_file', '', 'Path to test file with dependency head indices')
+cmd:option('-cl_train_orig_dataset_file', '', 'Path to train file with list of original semantic dataset')
+cmd:option('-cl_val_orig_dataset_file', '', 'Path to val file with list of original semantic dataset')
+cmd:option('-cl_test_orig_dataset_file', '', 'Path to test file with list of original semantic dataset')
 cmd:option('-cl_save', '', 'Path to folder where experiment will be saved')
 cmd:option('-cl_save_model', 1, 'Whether to save model on every epoch')
 cmd:option('-cl_pred_file', '', 'Prefix to save prediction files (should be base name, not full path)')
@@ -74,14 +77,15 @@ cmd:option('-cl_patience', 5, 'Stop training if no improvement in dev loss after
 cmd:option('-cl_enc_layer', 2, 'Which layer in the encoder/decoder to use for word representation (0 for word embeddings)')
 cmd:option('-cl_use_cell', 0, 'Whether to use cell vector instead of hidden vector for word representation')
 cmd:option('-cl_enc_or_dec', 'enc', 'Whether to use encoder or decoder for word representation')
-cmd:option('-cl_use_summary_vec', false, 'Wether to concatenate summary vector to word representation')
+cmd:option('-cl_use_summary_vec', false, 'Whether to concatenate summary vector to word representation')
 cmd:option('-cl_use_max_attn', false, 'Whether to use the representation of the most attended word')
 cmd:option('-cl_use_min_attn', false, 'Whether to use the representation of the least attended word')
-cmd:option('-cl_use_rand_attn', false, 'Whether tn use the representation of a random attended word')
+cmd:option('-cl_use_rand_attn', false, 'Whether to use the representation of a random attended word')
 cmd:option('-cl_no_dec_repr', false, 'Whether to not use decoder word representation; can apply only if one of cl_use_max/min/rand_attn options are given')
 -- dependency relation options
 cmd:option('-cl_deprel', false, 'Whether to predict syntactic dependency relations')
-cmd:option('-cl_semdeprel', false, 'Wehter to predict semantic dependency relations')
+cmd:option('-cl_semdeprel', false, 'Whether to predict semantic dependency relations')
+cmd:option('-cl_entailment', false, 'Whether to predict entailment between two sentences')
 cmd:option('-cl_deprel_repr', 'concat', 'Aggregation method for predicting dependency relations (concat | sum)')
 cmd:option('-cl_skip_root', true, 'Whether to skip the root (head index 0)')
 -- use linear classifier instead?
@@ -91,7 +95,8 @@ cmd:option('-cl_verbose', false, 'Print a lot of information')
 -- write word representations
 cmd:option('-cl_write_test_word_repr', false, 'Whether to write word representations to file (must specify cl_test_word_repr_file)')
 cmd:option('-cl_test_word_repr_file', '', 'Path to file to write word representations of test data (should be full path)')
-
+cmd:option('-cl_avg_reps', false, 'Whether to average the hidden representations states for the sentences')
+cmd:option('-cl_inferSent_reps', false, 'Whether to use the sentence representations as described in the InferSent paper')
 
 function copy(orig)
   local orig_type = type(orig)
@@ -529,6 +534,12 @@ function wordidx2sent(sent, idx2word, source_str, attn, skip_end)
   return table.concat(t, ' ')
 end
 
+function clean_sents(sent)
+  -- assumes the string contains two sentences seperated by |||
+  s_list = stringx.split(sent, "|||")
+ return {clean_sent(s_list[1]), clean_sent(s_list[2])}
+end
+
 function clean_sent(sent)
   local s = stringx.replace(sent, UNK_WORD, '')
   s = stringx.replace(s, START_WORD, '')
@@ -585,7 +596,7 @@ function init(arg)
   model_opt.brnn = model_opt.brnn or 0
   model_opt.input_feed = model_opt.input_feed or 1
   model_opt.attn = model_opt.attn or 1
-
+  print('source dict ' .. opt.src_dict)
   idx2word_src = idx2key(opt.src_dict)
   word2idx_src = flip_table(idx2word_src)
   idx2word_targ = idx2key(opt.targ_dict)
@@ -750,6 +761,7 @@ return {
   search = search,
   getOptions = getOptions,
   clean_sent = clean_sent,
+  clean_sents = clean_sents,
   sent2charidx = sent2charidx,
   sent2wordidx = sent2wordidx
 }

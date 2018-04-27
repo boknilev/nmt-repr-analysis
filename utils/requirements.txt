@@ -1,0 +1,7 @@
+docopt
+sklearn
+scipy
+matplotlib
+pandas
+
+stanfordcorenlp

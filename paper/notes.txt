@@ -1,0 +1,56 @@
+Philipp's NMT chaper
+"Similarly, Gu et al. (2016) augment the
+word prediction step of the neural translation model to either translate a word or copy a source word.
+They observe that the attention mechanism is mostly driven by semantics"
+
+"Researchers in deep learning often do not hesitate to claim that intermediate states in neural
+translation models encode semantics or meaning." page 80
+
+Grahm's tutorial on NMT
+Talking about why tree-structured networks are good - "The reason why this is intuitively useful is because each syntactic phrase
+usually also corresponds to a coherent semantic unit" - page 46
+
+Chunk-Based Bi-Scale Decoder for Neural Machine Translation:
+they use chunking in decoding because -
+"Intuitively, we think chunks are more specific in
+semantics, thus could extract more specific source
+context for translation"
+
+Analogs of Linguistic Structure in Deep Representations:
+they write the following -
+"One of the distinguishing features of natural
+language is compositionality: the existence of operations
+like negation and coordination that can be
+applied to utterances with predictable effects on
+meaning. RNN models trained for natural language
+processing tasks have been found to learn
+representations that encode some of this compositional
+structure—for example, sentence representations
+for machine translation encode explicit features
+for certain syntactic phenomena (Shi et al.,
+2016) and represent some semantic relationships
+translationally (Levy et al., 2014)." -- but I dont see how the citation from
+Levy's . Linguistic regularities in sparse and explicit
+word representations fits here.
+
+Google’s Multilingual Neural Machine Translation System: Enabling Zero-Shot Translation:
+"provide early
+evidence of shared semantic representations (interlingua) between languages"
+section 5.1 - small thing about evidence for interlingua
+
+References on the use of semantic information in (non-neural) MT, including semantic roles, which can be relevant to one of the RTE tasks. 
+Seng Yee Chan, Tou Hwee Ng, and David Chiang. 2007. Word Sense Disambiguation Improves Sta- tistical Machine Translation.
+Ding Liu and Daniel Gildea. 2010.Features for Machine Translation.
+Qin Gao and Stephan Vogel. 2011. Utilizing Target- Side Semantic Role Labels to Assist Hierarchical Phrase-based Machine Translation.
+Dekai Wu, Pascale N Fung, Marine Carpuat, Chi-kiu Lo, Yongsheng Yang, and Zhaojun Wu. 2011. Lex- ical Semantics for Statistical Machine Translation.
+Bevan Jones, Jacob Andreas, Daniel Bauer, Moritz Karl Hermann, and Kevin Knight. 2012. Semantics-Based Machine Translation with Hyper- edge Replacement Grammars.
+Marzieh Bazrafshan and Daniel Gildea. 2013. Seman- tic Roles for String to Tree Machine Translation.
+Marzieh Bazrafshan and Daniel Gildea. 2014. Com- paring Representations of Semantic Roles for String-To-Tree Decoding.
+
+Marine Carpuat and Yogarshi Vyas and Xing Niu. 2017 Detecting Cross-Lingual Semantic Divergence for Neural Machine Translation - "use a cross-lingual textual
+entailment system to distinguish sentence
+pairs that are parallel in meaning
+from those that are not, and show that filtering
+out divergent examples from training
+improves translation quality"
+
