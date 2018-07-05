@@ -11,7 +11,7 @@ Arguments:
   
 Options:
   -h, --help                     show this help message  
-  --split_mew                    Split multi-word expressions 
+  --split_mwe                    Split multi-word expressions 
 """
 
 
