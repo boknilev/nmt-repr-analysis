@@ -462,7 +462,7 @@ function train(train_data, epoch)
             for j = 1, #out_decoder - 1 do
               table.insert(rnn_state_dec, out_decoder[j])
             end
-            dec_all_out[{{},t}]:copy(out_decoder[module_num])   
+            dec_all_out[{{},t-1}]:copy(out_decoder[module_num])   
             if classifier_opt.verbose then
               print('t: ' .. t)
               print('decoder_input1:'); print(decoder_input1);
@@ -1088,7 +1088,7 @@ function eval(data, epoch, logger, test_or_val, pred_filename)
         for j = 1, #out_decoder - 1 do
           table.insert(rnn_state_dec, out_decoder[j])
         end
-        dec_all_out[{{},t}]:copy(out_decoder[module_num])                      
+        dec_all_out[{{},t-1}]:copy(out_decoder[module_num])                      
       end                            
     end  
     
