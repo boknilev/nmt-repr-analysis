@@ -24,7 +24,7 @@ Run `th src/train.lua` with the following mandatory arguments:
 * `cl_save`: Path to folder where experiment will be saved
 * `cl_pred_file`: Prefix to save prediction files (should be base name, not full path)
 
-Files with labels and sentences (`cl_train/val/test_lbl/source_file`) should have one sentence per line.
+Files with labels and sentences (`cl_train/val/test_lbl/source_file`) should have one sentence per line, with space-delimited words or labels. 
 
 For more options, see `src/s2sa/beam.lua`
 
